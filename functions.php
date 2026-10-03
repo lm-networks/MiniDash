@@ -2721,7 +2721,9 @@ function render_personal_modal() {
                             </div>
                             <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Bezpieczeństwo (2FA)</h3>
                         </div>
-                        <span class="text-[12px] font-black text-white/20 uppercase tracking-[0.2em] bg-white/5 px-2 py-1 rounded">Wkrótce</span>
+                        <a href="account_security.php" class="text-[12px] text-blue-400 font-bold uppercase tracking-widest hover:text-white transition flex items-center gap-1.5">
+                            <i data-lucide="monitor-smartphone" class="w-3.5 h-3.5"></i><?= __('account.sessions_link') ?>
+                        </a>
                     </div>
                     <div class="p-4 bg-white/[0.01] border border-white/5 rounded-2xl flex items-center justify-between opacity-50 relative group cursor-not-allowed overflow-hidden">
                         <div class="absolute inset-0 bg-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -2741,9 +2743,9 @@ function render_personal_modal() {
                             </div>
                             <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Historia Logowań</h3>
                         </div>
-                         <button type="button" class="text-[12px] text-blue-400 font-bold uppercase tracking-widest hover:text-white transition">
-                            Zobacz całą historię
-                        </button>
+                         <a href="account_security.php#history" class="text-[12px] text-blue-400 font-bold uppercase tracking-widest hover:text-white transition">
+                            <?= __('account.see_all') ?>
+                        </a>
                     </div>
                     <div class="bg-slate-900/50 border border-white/10 rounded-2xl overflow-hidden">
                         <div class="divide-y divide-white/5">

@@ -310,6 +310,19 @@ t_assert('cały dzień pn', false, oon_schedule_active($weekend, $at('2026-10-05
 date_default_timezone_set($tz_prev);
 
 // ═══════════════════════════════════════
+echo "\n=== SessionGuardTest ===\n";
+$known = ['ips' => ['83.1.2.3'], 'devices' => ['Windows|Chrome', 'Android|Chrome']];
+t_assert('sieć lokalna nigdy podejrzana', [], sg_suspicious_reasons('10.0.0.1', 'Local Network', 'Linux', 'Firefox', $known), $total_pass, $total_fail);
+t_assert('znane IP, PL', [], sg_suspicious_reasons('83.1.2.3', 'Kraków, Lesser Poland (Poland)', 'Linux', 'Firefox', $known), $total_pass, $total_fail);
+t_assert('nowe IP, znane urządzenie (LTE)', [], sg_suspicious_reasons('5.6.7.8', 'Warsaw, Mazovia (Poland)', 'Android', 'Chrome', $known), $total_pass, $total_fail);
+t_assert('nowe IP + nowe urządzenie', ['new_device'], sg_suspicious_reasons('5.6.7.8', 'Warsaw, Mazovia (Poland)', 'Linux', 'Firefox', $known), $total_pass, $total_fail);
+t_assert('spoza Polski', ['foreign'], sg_suspicious_reasons('83.1.2.3', 'Berlin, Land Berlin (Germany)', 'Windows', 'Chrome', $known), $total_pass, $total_fail);
+t_assert('spoza Polski + nowe urządzenie', ['foreign', 'new_device'], sg_suspicious_reasons('9.9.9.9', 'Moscow, Moscow (Russia)', 'Linux', 'Firefox', $known), $total_pass, $total_fail);
+t_assert('pierwsza sesja w historii - bez alarmu o nowym urządzeniu', [], sg_suspicious_reasons('5.6.7.8', 'Kraków, Lesser Poland (Poland)', 'Linux', 'Firefox', ['ips' => [], 'devices' => []]), $total_pass, $total_fail);
+t_assert('UA: Android Chrome', ['Android', 'Chrome'], sg_parse_ua('Mozilla/5.0 (Linux; Android 14; SM-S906B) AppleWebKit/537.36 Chrome/129.0 Mobile Safari/537.36'), $total_pass, $total_fail);
+t_assert('UA: Windows Edge', ['Windows', 'Edge'], sg_parse_ua('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/129.0 Safari/537.36 Edg/129.0'), $total_pass, $total_fail);
+
+// ═══════════════════════════════════════
 echo "\n╔══════════════════════════════════════╗\n";
 $line = "  TOTAL: {$total_pass} passed, {$total_fail} failed";
 echo "║{$line}" . str_repeat(' ', 38 - strlen($line)) . "║\n";

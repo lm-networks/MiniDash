@@ -514,6 +514,10 @@ if (empty($_SESSION['logged_in']) && !empty($_COOKIE['remember_me'])) {
                     $new_expires = date('Y-m-d H:i:s', time() + 30 * 86400);
                     $db_rm->prepare("INSERT INTO remember_tokens (selector, validator_hash, username, expires_at) VALUES (?, ?, ?, ?)")
                            ->execute([$new_selector, hash('sha256', $new_validator), $token_row['username'], $new_expires]);
+                    // Dla rejestru sesji (includes/session_guard.php): nowa sesja z tokenu.
+                    unset($_SESSION['sg_sid']);
+                    $_SESSION['sg_via'] = 'remember';
+                    $_SESSION['remember_selector'] = $new_selector;
 
                     $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
                     setcookie('remember_me', $new_selector . ':' . $new_validator, [
@@ -535,6 +539,5 @@ if (empty($_SESSION['logged_in']) && !empty($_COOKIE['remember_me'])) {
     }
 }
 
-
-
-
+// Rejestr sesji: rejestracja, wylogowanie sesji zakończonych z panelu, alert o obcym logowaniu.
+require_once __DIR__ . '/includes/session_guard.php';

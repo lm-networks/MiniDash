@@ -21,6 +21,19 @@ if (!empty($_COOKIE['remember_me'])) {
     setcookie('remember_me', '', ['expires' => 1, 'path' => '/']);
 }
 
+// Zamknij wpis w rejestrze sesji, żeby wylogowane urządzenie nie wisiało na liście aktywnych.
+if (!empty($_SESSION['sg_sid'])) {
+    $db_path = __DIR__ . '/data/minidash.db';
+    try {
+        $db = new PDO("sqlite:$db_path");
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $db->prepare("UPDATE user_sessions SET revoked_at = datetime('now') WHERE sid = ? AND revoked_at IS NULL")->execute([$_SESSION['sg_sid']]);
+        $db = null;
+    } catch (PDOException $e) {
+        // brak tabeli przed migracją — ignoruj
+    }
+}
+
 session_destroy();
 header('Location: login.php');
 exit;

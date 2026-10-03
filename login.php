@@ -40,6 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['last_login_time'] = time();
         $_SESSION['login_attempts'] = 0;
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        // Dla rejestru sesji: świeże logowanie formularzem (rejestracja przy następnym żądaniu).
+        unset($_SESSION['sg_sid'], $_SESSION['remember_selector']);
+        $_SESSION['sg_via'] = 'login';
 
         // Remember Me — persistent cookie (30 days)
         if (!empty($_POST['remember_me'])) {
@@ -50,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $db->prepare("INSERT INTO remember_tokens (selector, validator_hash, username, expires_at) VALUES (?, ?, ?, ?)");
             $stmt->execute([$selector, hash('sha256', $validator), $username, $expires]);
 
+            $_SESSION['remember_selector'] = $selector;
             $cookie_value = $selector . ':' . $validator;
             $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
             setcookie('remember_me', $cookie_value, [
@@ -116,6 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <!-- Subtle background light -->
             <div class="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
             
+            <?php if (!isset($error) && isset($_GET['revoked'])) $error = __('account.revoked_notice'); ?>
             <?php if (isset($error)): ?>
                 <div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg mb-6 flex items-center gap-3 animate-pulse">
                     <i data-lucide="alert-circle" class="w-5 h-5"></i>
