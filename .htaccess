@@ -1,0 +1,19 @@
+# Ochrona plików, które nie mogą wyjść przez HTTP (Apache / Web Station).
+# Odpowiednik dla Dockera/nginx jest w docker/nginx.conf.
+
+# Ukryte pliki i katalogi: .env (klucz API, hasło admina), .git (całe repo),
+# data/.encryption_key. Wyjątek: .well-known (certyfikaty Let's Encrypt).
+RedirectMatch 403 (^|/)\.(?!well-known(/|$))
+
+# Kod pomocniczy, migracje, testy i pliki wdrożeniowe - nic tu nie jest stroną.
+RedirectMatch 403 ^/(includes|migrations|tests|docker|docs)(/|$)
+
+<FilesMatch "\.(sql|sh|bak|log|example|md)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
