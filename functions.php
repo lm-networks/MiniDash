@@ -1468,6 +1468,114 @@ function get_wan_links(?array $trad_gateway): array
 }
 
 /**
+ * Skleja próbki „łącze w dole" z wan_stats w przerwy.
+ *
+ * Czysta funkcja — dostęp do bazy idzie przez $next_up, żeby logikę dało się
+ * przetestować bez SQLite. Kolejne próbki w dole tego samego łącza należą do
+ * jednej przerwy, jeśli wskazują na tę samą pierwszą próbkę „w górze" po nich.
+ *
+ * @param array    $down    [['wan_idx' => int, 'at' => 'Y-m-d H:i:s' (UTC)], ...] posortowane po wan_idx, at
+ * @param callable $next_up fn(int $wan_idx, string $at): ?string — pierwsza próbka up=1 po $at albo null
+ * @return array [['wan_idx','start','last_down','end' (null = trwa), 'samples'], ...] od najnowszej
+ */
+function group_wan_outages(array $down, callable $next_up): array
+{
+    $out = [];
+    $cur = null;
+    foreach ($down as $d) {
+        $idx = (int)$d['wan_idx'];
+        $at  = (string)$d['at'];
+        if ($cur !== null && $cur['wan_idx'] === $idx && ($cur['end'] === null || $at < $cur['end'])) {
+            $cur['last_down'] = $at;
+            $cur['samples']++;
+            continue;
+        }
+        if ($cur !== null) $out[] = $cur;
+        $cur = ['wan_idx' => $idx, 'start' => $at, 'last_down' => $at, 'end' => $next_up($idx, $at), 'samples' => 1];
+    }
+    if ($cur !== null) $out[] = $cur;
+
+    usort($out, fn($a, $b) => strcmp($b['start'], $a['start']));
+    return $out;
+}
+
+/**
+ * Przerwy łączy WAN z ostatnich $days dni (czasy w UTC, tak jak w bazie).
+ * Czas trwania jest przybliżony do odstępu próbkowania (~1 min).
+ */
+function get_wan_outages(PDO $db, int $days): array
+{
+    $since = gmdate('Y-m-d H:i:s', time() - $days * 86400);
+    $q = $db->prepare("SELECT wan_idx, recorded_at AS at FROM wan_stats
+                       WHERE wan_idx > 0 AND up = 0 AND recorded_at >= ?
+                       ORDER BY wan_idx, recorded_at");
+    $q->execute([$since]);
+    $down = $q->fetchAll(PDO::FETCH_ASSOC);
+    if (!$down) return [];
+
+    $nq = $db->prepare("SELECT MIN(recorded_at) FROM wan_stats WHERE wan_idx = ? AND up = 1 AND recorded_at > ?");
+    $next_up = function (int $idx, string $at) use ($nq): ?string {
+        $nq->execute([$idx, $at]);
+        $v = $nq->fetchColumn();
+        return $v ?: null;
+    };
+    return group_wan_outages($down, $next_up);
+}
+
+/**
+ * Dostępność łączy: [wan_idx => ['pct','samples']] w ostatnich $days dniach,
+ * liczona z próbek, które faktycznie są w bazie (dziury w pomiarach jej nie zaniżają).
+ */
+function get_wan_availability(PDO $db, int $days): array
+{
+    $since = gmdate('Y-m-d H:i:s', time() - $days * 86400);
+    $q = $db->prepare("SELECT wan_idx, AVG(up) * 100 AS pct, COUNT(*) AS n FROM wan_stats
+                       WHERE wan_idx > 0 AND recorded_at >= ? GROUP BY wan_idx ORDER BY wan_idx");
+    $q->execute([$since]);
+    $res = [];
+    foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $res[(int)$r['wan_idx']] = ['pct' => (float)$r['pct'], 'samples' => (int)$r['n']];
+    }
+    return $res;
+}
+
+/** Dostępność miesięczna: ['Y-m' => [wan_idx => pct]], od najnowszego miesiąca. */
+function get_wan_monthly_availability(PDO $db, int $months): array
+{
+    $since = gmdate('Y-m-01 00:00:00', strtotime('first day of -' . max(0, $months - 1) . ' month'));
+    $q = $db->prepare("SELECT strftime('%Y-%m', recorded_at) AS ym, wan_idx, AVG(up) * 100 AS pct
+                       FROM wan_stats WHERE wan_idx > 0 AND recorded_at >= ?
+                       GROUP BY ym, wan_idx ORDER BY ym DESC, wan_idx");
+    $q->execute([$since]);
+    $res = [];
+    foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $res[$r['ym']][(int)$r['wan_idx']] = (float)$r['pct'];
+    }
+    return $res;
+}
+
+/**
+ * Przerwy w pomiarach (brak jakiejkolwiek próbki dłużej niż $min_minutes) — np. brak
+ * prądu albo niedziałający cron. To NIE są awarie łącza: wtedy nic nie wiemy o stanie.
+ */
+function get_wan_data_gaps(PDO $db, int $days, int $min_minutes = 10): array
+{
+    $since = gmdate('Y-m-d H:i:s', time() - $days * 86400);
+    $q = $db->prepare("SELECT recorded_at FROM wan_stats WHERE wan_idx = 0 AND recorded_at >= ? ORDER BY recorded_at");
+    $q->execute([$since]);
+    $gaps = [];
+    $prev = null;
+    while (($at = $q->fetchColumn()) !== false) {
+        $t = strtotime($at . ' UTC');
+        if ($prev !== null && ($t - $prev) >= $min_minutes * 60) {
+            $gaps[] = ['start' => $prev, 'end' => $t, 'seconds' => $t - $prev];
+        }
+        $prev = $t;
+    }
+    return array_reverse($gaps);
+}
+
+/**
  * Porównuje bieżący stan łączy WAN z poprzednim i zwraca alerty do wysłania
  * wraz z nowym stanem do zapisania.
  *

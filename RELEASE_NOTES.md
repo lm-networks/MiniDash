@@ -1,5 +1,25 @@
 # MiniDash — Release Notes
 
+## v2.5.0 (2026-10-03)
+
+Historia awarii łączy WAN i wybór łącza na wykresie dashboardu.
+
+### Historia łączy WAN (`wan_history.php`)
+- Nowa strona, link „Historia awarii" w panelu „Łącze WAN" na dashboardzie
+- Kafelek per łącze: dostępność w procentach, liczba awarii, łączny czas przerw, ostatnia awaria; zakres 7 / 30 / 90 dni
+- Lista awarii: łącze, początek, koniec (albo „trwa"), czas trwania z dokładnością do ~1 min
+- Dostępność miesięczna każdego łącza z ostatnich trzech miesięcy
+- Osobno „przerwy w pomiarach" (≥ 10 min bez żadnej próbki - brak prądu, stojący cron). Nie liczą się jako awaria ani nie zaniżają dostępności, bo w tym czasie stan łącza jest nieznany
+- Wszystko liczone z `wan_stats` (kolumna `up` per łącze z v2.4.0), bez odpytywania kontrolera
+- Grupowanie próbek w przerwy w czystej funkcji `group_wan_outages()`, pokrytej testami
+
+### Wybór łącza na wykresie
+- Kliknięcie kafelka WAN1 / WAN2 nad wykresem przełącza wykres na to łącze, w jego kolorach (WAN1 niebieski, WAN2 zielony)
+- Nagłówek panelu pokazuje wtedy publiczne IP, status i transfer wybranego łącza
+- Ponowne kliknięcie albo przycisk „Wszystkie łącza" wraca do sumy z przerywaną linią per łącze; wybór zapamiętany w przeglądarce
+
+---
+
 ## v2.4.0 (2026-07-24)
 
 Drugie łącze WAN w całej aplikacji, alert failovera, raport dobowy i kafelek największych konsumentów.

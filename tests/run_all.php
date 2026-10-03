@@ -267,6 +267,29 @@ t_assert('complex count', 42, $r['count'] ?? null, $total_pass, $total_fail);
 @unlink(dirname(__DIR__) . '/data/cache_' . md5('_test_complex') . '.json');
 
 // ═══════════════════════════════════════
+echo "\n=== WanOutagesTest ===\n";
+// Próbki „w górze" po każdej próbce w dole: [idx => [at => pierwsze up po nim]]
+$wo_up = [
+    1 => ['2026-09-01 10:00:00' => '2026-09-01 10:03:00', '2026-09-01 10:01:00' => '2026-09-01 10:03:00',
+          '2026-09-02 08:00:00' => '2026-09-02 08:01:00'],
+    2 => ['2026-09-05 01:34:00' => null],
+];
+$wo_next = fn(int $i, string $at) => $wo_up[$i][$at] ?? null;
+$wo = group_wan_outages([
+    ['wan_idx' => 1, 'at' => '2026-09-01 10:00:00'],
+    ['wan_idx' => 1, 'at' => '2026-09-01 10:01:00'],
+    ['wan_idx' => 1, 'at' => '2026-09-02 08:00:00'],
+    ['wan_idx' => 2, 'at' => '2026-09-05 01:34:00'],
+], $wo_next);
+t_assert('3 przerwy (dwie WAN1, jedna WAN2)', 3, count($wo), $total_pass, $total_fail);
+t_assert('najnowsza na górze', '2026-09-05 01:34:00', $wo[0]['start'] ?? null, $total_pass, $total_fail);
+t_assert('bez próbki up = trwa', true, array_key_exists('end', $wo[0] ?? []) && $wo[0]['end'] === null, $total_pass, $total_fail);
+t_assert('kolejne próbki w dole = jedna przerwa', 2, $wo[2]['samples'] ?? null, $total_pass, $total_fail);
+t_assert('koniec = pierwsza próbka up', '2026-09-01 10:03:00', $wo[2]['end'] ?? null, $total_pass, $total_fail);
+t_assert('up pomiędzy = osobna przerwa', '2026-09-02 08:00:00', $wo[1]['start'] ?? null, $total_pass, $total_fail);
+t_assert('brak próbek w dole', [], group_wan_outages([], $wo_next), $total_pass, $total_fail);
+
+// ═══════════════════════════════════════
 echo "\n╔══════════════════════════════════════╗\n";
 $line = "  TOTAL: {$total_pass} passed, {$total_fail} failed";
 echo "║{$line}" . str_repeat(' ', 38 - strlen($line)) . "║\n";

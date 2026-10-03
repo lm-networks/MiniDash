@@ -584,14 +584,16 @@ try {
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
                     <div>
                         <div class="flex items-center gap-3 mb-1">
-                            <h2 class="text-2xl font-black tracking-tight"><?= __('dashboard.wan_link') ?></h2>
-                            <span class="px-2 py-0.5 <?= $wan_status === 'ONLINE' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20' ?> text-[12px] font-bold rounded-md border">
+                            <h2 class="text-2xl font-black tracking-tight"><?= __('dashboard.wan_link') ?><span id="wan-head-sel" class="ml-2"></span></h2>
+                            <span id="wan-head-status" data-summary="<?= htmlspecialchars($wan_status) ?>" class="px-2 py-0.5 <?= $wan_status === 'ONLINE' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20' ?> text-[12px] font-bold rounded-md border">
                                 <?= $wan_status ?>
                             </span>
+                            <button type="button" id="wan-sel-reset" onclick="selectWan(0)" class="hidden px-2 py-0.5 text-[11px] font-bold rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-white/30 transition-colors"><?= __('dashboard.wan_all_links') ?></button>
+                            <a href="wan_history.php" class="px-2 py-0.5 text-[11px] font-bold rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-white/30 transition-colors flex items-center gap-1"><i data-lucide="history" class="w-3 h-3"></i><?= __('wan_history.link') ?></a>
                         </div>
                         <p class="text-slate-500 text-sm flex items-center gap-2">
                              <i data-lucide="globe" class="w-3.5 h-3.5"></i>
-                             <?= __('dashboard.public_ip') ?>: <span class="font-mono text-slate-300"><?= htmlspecialchars($wan_ip) ?></span>
+                             <?= __('dashboard.public_ip') ?>: <span id="wan-head-ip" data-summary="<?= htmlspecialchars($wan_ip) ?>" class="font-mono text-slate-300"><?= htmlspecialchars($wan_ip) ?></span>
                         </p>
                     </div>
                     <div class="flex gap-8">
@@ -622,7 +624,7 @@ try {
                     <?php foreach ($wans as $w):
                         $lc = $w['up'] ? ($w['index'] === 1 ? 'blue' : 'emerald') : 'red';
                     ?>
-                    <div class="flex items-center gap-4 p-4 bg-slate-900/40 rounded-2xl border border-white/5" data-wan-idx="<?= (int)$w['index'] ?>">
+                    <div class="flex items-center gap-4 p-4 bg-slate-900/40 rounded-2xl border border-white/5 cursor-pointer hover:bg-slate-900/70 transition-colors" data-wan-idx="<?= (int)$w['index'] ?>" onclick="selectWan(<?= (int)$w['index'] ?>)" title="<?= htmlspecialchars(__('dashboard.wan_select_hint'), ENT_QUOTES) ?>">
                         <div class="w-2.5 h-2.5 rounded-full bg-<?= $lc ?>-500 <?= $w['up'] ? 'animate-pulse' : '' ?> shrink-0" data-wan-dot></div>
                         <div class="min-w-0 flex-grow">
                             <div class="flex items-center gap-2">
@@ -1291,6 +1293,124 @@ try {
             .catch(e => console.warn('Dashboard ping update error:', e));
         };
 
+        // ─── Wybór łącza WAN na wykresie ──────────────────────────────────────
+        // 0 = suma wszystkich łączy (z przerywaną linią per łącze), 1..n = tylko to łącze,
+        // w jego kolorach, a nagłówek pokazuje jego publiczne IP, status i transfer.
+        const WAN_COLORS = {
+            1: { rx: '#3b82f6', tx: '#93c5fd' },
+            2: { rx: '#10b981', tx: '#6ee7b7' },
+            3: { rx: '#ec4899', tx: '#f9a8d4' },
+            4: { rx: '#14b8a6', tx: '#5eead4' }
+        };
+        const WAN_SUM = { rx: '#10b981', tx: '#f59e0b' };
+        let wanLast20 = [];
+        let wanSel = 0;
+        try { wanSel = parseInt(localStorage.getItem('minidash.wanSel') || '0', 10) || 0; } catch (e) {}
+
+        function wanGradient(hex, alpha) {
+            const ctx = document.getElementById('wanLiveChart').getContext('2d');
+            const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+            const grad = ctx.createLinearGradient(0, 0, 0, 250);
+            grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha})`);
+            grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+            return grad;
+        }
+
+        window.selectWan = function selectWan(idx) {
+            wanSel = (idx === wanSel) ? 0 : idx;   // drugie kliknięcie w to samo łącze wraca do sumy
+            try { localStorage.setItem('minidash.wanSel', String(wanSel)); } catch (e) {}
+            renderWan();
+        };
+
+        function renderWan() {
+            if (!wanChart) return;
+            const last20 = wanLast20;
+            const wanIdxs = [...new Set(last20.flatMap(d => (d.wans || []).map(w => w.idx)))].sort();
+            // Wybrane łącze zniknęło z danych (np. został jeden WAN) — wracamy do sumy.
+            if (wanSel && wanIdxs.length && !wanIdxs.includes(wanSel)) wanSel = 0;
+            const pick = (d) => (d.wans || []).find(x => x.idx === wanSel);
+
+            wanChart.data.labels = last20.map(d => {
+                const date = new Date(d.timestamp * 1000);
+                return date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0') + ':' + String(date.getSeconds()).padStart(2, '0');
+            });
+            const dsRx = wanChart.data.datasets[0], dsTx = wanChart.data.datasets[1];
+            // Przerywane linie per łącze tylko w widoku sumy.
+            wanChart.data.datasets = [dsRx, dsTx];
+
+            if (wanSel) {
+                const c = WAN_COLORS[wanSel] || { rx: '#94a3b8', tx: '#cbd5e1' };
+                dsRx.label = 'WAN' + wanSel + ' ↓';
+                dsTx.label = 'WAN' + wanSel + ' ↑';
+                dsRx.borderColor = c.rx; dsRx.backgroundColor = wanGradient(c.rx, 0.3);
+                dsTx.borderColor = c.tx; dsTx.backgroundColor = wanGradient(c.tx, 0.15);
+                dsRx.data = last20.map(d => { const w = pick(d); return w ? w.rx : null; });
+                dsTx.data = last20.map(d => { const w = pick(d); return w ? w.tx : null; });
+                wanChart.options.plugins.legend.display = true;
+            } else {
+                dsRx.label = 'RX (Download)';
+                dsTx.label = 'TX (Upload)';
+                dsRx.borderColor = WAN_SUM.rx; dsRx.backgroundColor = wanGradient(WAN_SUM.rx, 0.3);
+                dsTx.borderColor = WAN_SUM.tx; dsTx.backgroundColor = wanGradient(WAN_SUM.tx, 0.2);
+                dsRx.data = last20.map(d => d.rx);
+                dsTx.data = last20.map(d => d.tx);
+                // Linie per łącze — przy failoverze suma wygląda tak samo niezależnie
+                // od tego, które łącze niesie ruch. Dopiero rozbicie to pokazuje.
+                if (wanIdxs.length > 1) {
+                    wanIdxs.forEach(idx => {
+                        wanChart.data.datasets.push({
+                            label: 'WAN' + idx + ' ↓',
+                            wanIdx: idx,
+                            data: last20.map(d => { const w = (d.wans || []).find(x => x.idx === idx); return w ? w.rx : null; }),
+                            borderColor: (WAN_COLORS[idx] || { rx: '#94a3b8' }).rx,
+                            borderWidth: 1.5,
+                            borderDash: [4, 3],
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 0
+                        });
+                    });
+                }
+                wanChart.options.plugins.legend.display = wanIdxs.length > 1;
+            }
+            wanChart.update('none');
+
+            // Nagłówek panelu: suma albo wybrane łącze
+            const last = last20[last20.length - 1];
+            const lw = (last && wanSel) ? pick(last) : null;
+            const rxEl = document.getElementById('wan-rx-val');
+            const txEl = document.getElementById('wan-tx-val');
+            const ipEl = document.getElementById('wan-head-ip');
+            const stEl = document.getElementById('wan-head-status');
+            const selEl = document.getElementById('wan-head-sel');
+            const resetEl = document.getElementById('wan-sel-reset');
+            if (last) {
+                if (rxEl) rxEl.innerText = formatBps(lw ? lw.rx : last.rx);
+                if (txEl) txEl.innerText = formatBps(lw ? lw.tx : last.tx);
+            }
+            if (stEl) {
+                const online = lw ? !!lw.up : stEl.dataset.summary === 'ONLINE';
+                stEl.innerText = lw ? (lw.up ? 'ONLINE' : 'OFFLINE') : stEl.dataset.summary;
+                stEl.className = 'px-2 py-0.5 text-[12px] font-bold rounded-md border ' + (online
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-red-500/10 text-red-400 border-red-500/20');
+            }
+            if (ipEl) ipEl.innerText = lw ? (lw.ip || 'N/A') : ipEl.dataset.summary;
+            if (selEl) {
+                selEl.innerText = wanSel ? '· WAN' + wanSel : '';
+                selEl.style.color = wanSel ? (WAN_COLORS[wanSel] || { rx: '#94a3b8' }).rx : '';
+            }
+            if (resetEl) resetEl.classList.toggle('hidden', !wanSel);
+
+            // Podświetlenie wybranego kafelka łącza
+            document.querySelectorAll('#wan-links-strip [data-wan-idx]').forEach(card => {
+                const idx = parseInt(card.getAttribute('data-wan-idx'), 10);
+                const on = idx === wanSel;
+                card.style.boxShadow = on ? `0 0 0 2px ${(WAN_COLORS[idx] || { rx: '#94a3b8' }).rx}` : '';
+                card.style.borderColor = on ? 'transparent' : '';
+            });
+        }
+
         // Function to update stats
         window.updateStats = function updateStats() {
             updateDashboardPings(); // Refresh pings too
@@ -1300,42 +1420,8 @@ try {
                 .then(r => r.json())
                 .then(data => {
                     const last20 = data.slice(-20);
-                    wanChart.data.labels = last20.map(d => {
-                        const date = new Date(d.timestamp * 1000);
-                        return date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0') + ':' + String(date.getSeconds()).padStart(2, '0');
-                    });
-                    wanChart.data.datasets[0].data = last20.map(d => d.rx);
-                    wanChart.data.datasets[1].data = last20.map(d => d.tx);
-
-                    // Linie per łącze — przy failoverze suma wygląda tak samo niezależnie
-                    // od tego, które łącze niesie ruch. Dopiero rozbicie to pokazuje.
-                    const wanIdxs = [...new Set(last20.flatMap(d => (d.wans || []).map(w => w.idx)))].sort();
-                    if (wanIdxs.length > 1) {
-                        const wanColors = { 1: '#60a5fa', 2: '#a78bfa', 3: '#f472b6', 4: '#2dd4bf' };
-                        wanIdxs.forEach(idx => {
-                            let ds = wanChart.data.datasets.find(d => d.wanIdx === idx);
-                            if (!ds) {
-                                ds = {
-                                    label: 'WAN' + idx + ' ↓',
-                                    wanIdx: idx,
-                                    data: [],
-                                    borderColor: wanColors[idx] || '#94a3b8',
-                                    borderWidth: 1.5,
-                                    borderDash: [4, 3],
-                                    fill: false,
-                                    tension: 0.4,
-                                    pointRadius: 0
-                                };
-                                wanChart.data.datasets.push(ds);
-                            }
-                            ds.data = last20.map(d => {
-                                const w = (d.wans || []).find(x => x.idx === idx);
-                                return w ? w.rx : null;
-                            });
-                        });
-                        wanChart.options.plugins.legend.display = true;
-                    }
-                    wanChart.update('none');
+                    wanLast20 = last20;
+                    renderWan();
 
                     // Pasek łączy nad wykresem
                     const lastSample = last20[last20.length - 1];
@@ -1359,13 +1445,6 @@ try {
                         });
                     }
 
-                    if (last20.length > 0) {
-                        const last = last20[last20.length - 1];
-                        const rxEl = document.getElementById('wan-rx-val');
-                        const txEl = document.getElementById('wan-tx-val');
-                        if (rxEl) rxEl.innerText = formatBps(last.rx);
-                        if (txEl) txEl.innerText = formatBps(last.tx);
-                    }
                     
                     // Animate refresh button icon if exists
                     const btn = document.querySelector('button[title="<?= __('dashboard.refresh_data') ?>"] i');
