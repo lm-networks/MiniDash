@@ -2811,7 +2811,9 @@ function render_personal_modal() {
             e.preventDefault();
             const form = e.target;
             const formData = new FormData(form);
-            const btn = form.querySelector('button[type="submit"]');
+            // Przycisk „Zapisz Dane" stoi POZA formularzem (atrybut form="personalForm"),
+            // więc form.querySelector go nie widzi — bez tego leciał TypeError przed wysyłką.
+            const btn = e.submitter || document.querySelector('button[type="submit"][form="personalForm"]');
             const originalText = btn.innerHTML;
             
             btn.disabled = true;
