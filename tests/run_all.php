@@ -323,6 +323,22 @@ t_assert('UA: Android Chrome', ['Android', 'Chrome'], sg_parse_ua('Mozilla/5.0 (
 t_assert('UA: Windows Edge', ['Windows', 'Edge'], sg_parse_ua('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/129.0 Safari/537.36 Edg/129.0'), $total_pass, $total_fail);
 
 // ═══════════════════════════════════════
+echo "\n=== DashboardLayoutTest ===\n";
+require_once dirname(__DIR__) . '/includes/dashboard_layout.php';
+$dl = dw_sanitize_layout(['order' => ['vlan', 'vlan', 'Bad Id!', 'clients'], 'widgets' => [
+    'vlan' => ['w' => 9, 'h' => 2, 'hidden' => 1], 'clients' => ['w' => 0, 'h' => 'x'], '<script>' => ['w' => 1]]]);
+t_assert('kolejność bez duplikatów i śmieci', ['vlan', 'clients'], $dl['order'], $total_pass, $total_fail);
+t_assert('szerokość przycięta do 5', 5, $dl['widgets']['vlan']['w'], $total_pass, $total_fail);
+t_assert('wysokość 2', 2, $dl['widgets']['vlan']['h'], $total_pass, $total_fail);
+t_assert('ukryty', true, $dl['widgets']['vlan']['hidden'], $total_pass, $total_fail);
+t_assert('szerokość min 1', 1, $dl['widgets']['clients']['w'], $total_pass, $total_fail);
+t_assert('zła wysokość = auto', 'auto', $dl['widgets']['clients']['h'], $total_pass, $total_fail);
+t_assert('zły id odrzucony', false, isset($dl['widgets']['<script>']), $total_pass, $total_fail);
+t_assert('nowe kafelki na końcu, nieznane wyrzucone', ['vlan', 'clients', 'wan_1', 'wan_2'],
+    dw_resolve_order(['clients', 'wan_1', 'vlan', 'wan_2'], ['vlan', 'gone', 'clients']), $total_pass, $total_fail);
+t_assert('bez zapisu = domyślna', ['a', 'b'], dw_resolve_order(['a', 'b'], []), $total_pass, $total_fail);
+
+// ═══════════════════════════════════════
 echo "\n╔══════════════════════════════════════╗\n";
 $line = "  TOTAL: {$total_pass} passed, {$total_fail} failed";
 echo "║{$line}" . str_repeat(' ', 38 - strlen($line)) . "║\n";

@@ -38,7 +38,7 @@ try {
         $trad_resp = fetch_api("/proxy/network/api/s/$tradSite/stat/sta");
         $trad_clients = $trad_resp['data'] ?? [];
         $clients = $clients_resp['data'] ?? [];
-    
+
     // Merge data
     if (!empty($trad_clients)) {
         $trad_map = [];
@@ -94,7 +94,7 @@ try {
             }
         }
     }
-    
+
     // 3. Fetch Infrastructure Devices with traditional API for better stats
     $tradSite = $tradSite ?? get_trad_site_id($siteId);
     $trad_dev_resp = fetch_api("/proxy/network/api/s/$tradSite/stat/device");
@@ -108,9 +108,9 @@ try {
     $infr_resp = fetch_api("/proxy/network/integration/v1/sites/$siteId/devices");
     $infr_devices = $infr_resp['data'] ?? [];
 
-    
+
     // Ensure we also populate subnets for detect_vlan_id
-    get_vlans(); 
+    get_vlans();
 
     $gateway = null;
     $cpu = 0; $ram = 0; $wan_rx = 0; $wan_tx = 0; $wans = []; $latency = 0;
@@ -119,11 +119,11 @@ try {
         $mac = normalize_mac($d['macAddress'] ?? $d['mac'] ?? '');
         $trad = $trad_dev_map[$mac] ?? [];
         $model = $d['model'] ?? '';
-        
+
         // Much more aggressive gateway detection
-        $is_gateway = in_array($model, ['UDR', 'UDM', 'UXG', 'USG', 'UCG', 'UX', 'UXG-LITE', 'UXG-MAX', 'UDMPRO', 'UDMSE', 'UDM-SE', 'UDM-PRO-MAX']) 
-                    || isset($d['wan1']) 
-                    || ($trad['type'] ?? '') === 'ugw' 
+        $is_gateway = in_array($model, ['UDR', 'UDM', 'UXG', 'USG', 'UCG', 'UX', 'UXG-LITE', 'UXG-MAX', 'UDMPRO', 'UDMSE', 'UDM-SE', 'UDM-PRO-MAX'])
+                    || isset($d['wan1'])
+                    || ($trad['type'] ?? '') === 'ugw'
                     || ($trad['type'] ?? '') === 'u-wan'
                     || isset($trad['wan1']);
 
@@ -159,7 +159,7 @@ try {
         $wan_status = 'ONLINE';
         if ($w['ip'] && $w['ip'] !== 'N/A') { $wan_ip = $w['ip']; break; }
     }
-    
+
     // Cache navbar stats and WAN details in session for other pages
     $_SESSION['navbar_stats'] = [
         'cpu' => $cpu,
@@ -167,14 +167,14 @@ try {
         'down' => $wan_rx,
         'up' => $wan_tx
     ];
-    
+
     $_SESSION['wan_details'] = [
         'wan_ip' => $wan_ip,
         'wans' => $wans, // Store full list
         'gateway_model' => $gateway['model'] ?? $gateway['name'] ?? 'UniFi Gateway',
         'wan_status' => $wan_status
     ];
-    
+
     // 3. Fetch Historical Stats (for Total counters)
     $user_resp = fetch_api("/proxy/network/api/s/$siteId/stat/user");
     $hist_clients = [];
@@ -256,10 +256,10 @@ try {
     foreach ($clients as $c) {
         $c_rx = (float)($c['rx_rate'] ?? 0);
         $c_tx = (float)($c['tx_rate'] ?? 0);
-        
+
         $total_clients_rx += $c_rx;
         $total_clients_tx += $c_tx;
-        
+
         if ($c_rx > $max_rx_rate) {
             $max_rx_rate = $c_rx;
             $top_downloader = $c;
@@ -308,19 +308,19 @@ try {
     <script src="assets/js/chart.min.js"></script>
 </head>
 <body class="custom-scrollbar">
+    <?php require_once __DIR__ . '/includes/dashboard_layout.php'; ?>
     <?php render_nav("MiniDash", [
         'cpu' => $cpu,
         'ram' => $ram,
         'down' => $wan_rx,
         'up' => $wan_tx
     ]); ?>
-    
+
     <div class="max-w-7xl mx-auto p-4 md:p-8">
         <!-- Dashboard Content -->
 
-        <!-- Top Stats Grid (5x2) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-            <!-- Row 1 -->
+        <!-- Kafelki dashboardu: każdy to widżet (includes/dashboard_layout.php), układ z trybu edycji -->
+            <?php dw_start('clients'); ?>
             <!-- 1. Clients -->
             <div onclick="openClientsModal()" class="glass-card p-5 stat-glow-blue cursor-pointer group">
                 <div class="flex justify-between items-center mb-4">
@@ -333,6 +333,7 @@ try {
                 <div class="text-slate-400 text-sm mt-1 font-medium italic"><?= __('dashboard.active_clients') ?></div>
             </div>
 
+            <?php dw_end(); dw_start('wifi'); ?>
             <!-- 2. WiFi SSIDs -->
             <div id="wifi-card" class="glass-card p-5 stat-glow-indigo group overflow-hidden cursor-pointer hover:bg-white/[0.02] transition-colors relative">
                 <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -345,21 +346,21 @@ try {
                     <span class="text-xs font-black text-slate-500 uppercase tracking-[0.2em]"><?= __('dashboard.wifi_networks') ?></span>
                 </div>
                 <div class="space-y-1.5 relative z-10">
-                    <?php 
+                    <?php
                     $limit = 2;
                     $i = 0;
-                    foreach ($wifi_stats as $ssid => $count): 
+                    foreach ($wifi_stats as $ssid => $count):
                         if ($i >= $limit) break;
                     ?>
                         <div class="flex justify-between items-center text-xs">
                             <span class="font-bold text-slate-200 truncate mr-2"><?= htmlspecialchars($ssid) ?></span>
                             <span class="font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20"><?= $count ?></span>
                         </div>
-                    <?php 
+                    <?php
                         $i++;
-                    endforeach; 
+                    endforeach;
                     ?>
-                    
+
                     <div class="pt-3">
                         <button onclick="openWifiModal(); event.stopPropagation();" class="w-full py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-xs font-black uppercase tracking-widest rounded-lg border border-indigo-500/20 transition-all flex items-center justify-center gap-2">
                             <span><?= __('common.manage') ?></span>
@@ -369,6 +370,7 @@ try {
                 </div>
             </div>
 
+            <?php dw_end(); dw_start('infra'); ?>
             <!-- 3. Infrastructure -->
             <div id="infr-card" class="glass-card p-6 stat-glow-purple cursor-pointer group hover:scale-[1.02] transition-all">
                 <div class="flex justify-between items-center mb-5">
@@ -381,6 +383,7 @@ try {
                 <div class="text-slate-500 text-xs mt-1 font-black uppercase tracking-widest italic tracking-[0.1em]"><?= __('dashboard.unifi_devices') ?></div>
             </div>
 
+            <?php dw_end(); dw_start('wan_in'); ?>
             <!-- 4. WAN Ingress (Download) -->
             <div onclick="openWanFlowsModal()" class="glass-card p-6 stat-glow-amber cursor-pointer group hover:scale-[1.02] transition-all">
                 <div class="flex justify-between items-center mb-5">
@@ -393,6 +396,7 @@ try {
                 <div class="text-slate-500 text-xs uppercase font-black tracking-[0.2em] mt-1"><?= __('dashboard.internet_to_router') ?></div>
             </div>
 
+            <?php dw_end(); dw_start('wan_out'); ?>
             <!-- 5. WAN Egress (Upload) -->
             <div onclick="openWanFlowsModal()" class="glass-card p-6 stat-glow-emerald cursor-pointer group hover:scale-[1.02] transition-all">
                 <div class="flex justify-between items-center mb-5">
@@ -405,6 +409,7 @@ try {
                 <div class="text-slate-500 text-xs uppercase font-black tracking-[0.2em] mt-1"><?= __('dashboard.router_to_internet') ?></div>
             </div>
 
+            <?php dw_end(); dw_start('stalker'); ?>
             <!-- 6. Stalker Widget -->
             <div onclick="window.location='stalker.php'" class="glass-card rounded-3xl p-6 cursor-pointer hover:bg-white/[0.04] transition group">
                 <div class="flex items-center justify-between mb-4">
@@ -418,8 +423,9 @@ try {
                 <div class="text-[12px] text-slate-600 mt-2 truncate" id="stalker-widget-last"><?= __('common.loading') ?></div>
             </div>
 
+            <?php dw_end(); ?>
             <!-- 7. WAN Status (Dynamic Loop) -->
-            <?php if (empty($wans)): ?>
+            <?php if (empty($wans)): dw_start('wan_offline'); ?>
             <div class="glass-card p-5 stat-glow-red cursor-pointer" onclick="openWanModal()">
                 <div class="flex justify-between items-center mb-4">
                     <div class="p-2.5 bg-red-500/10 text-red-400 rounded-xl">
@@ -432,17 +438,18 @@ try {
                 <div class="text-lg font-black tracking-tighter truncate text-slate-200"><?= __('common.no_connection') ?></div>
                 <div class="text-slate-500 text-[12px] mt-1 font-bold uppercase tracking-widest"><?= __('dashboard.wan_1') ?></div>
             </div>
-            <?php else: ?>
-                <?php foreach ($wans as $index => $w): 
+            <?php dw_end(); else: ?>
+                <?php foreach ($wans as $index => $w):
                     $is_wan1 = ($w['index'] === 1 || $w['name'] === 'WAN 1');
                     $is_online = ($w['status'] === 'ONLINE');
                     $color = $is_online ? ($is_wan1 ? 'blue' : 'emerald') : 'red';
+                    dw_start('wan_' . (int)$w['index']);
                 ?>
                 <div class="glass-card p-5 stat-glow-<?= $color ?> cursor-pointer group hover:bg-white/[0.02] transition-all relative overflow-hidden" onclick="openWanModal()">
                     <?php if ($is_wan1): ?>
                         <div class="absolute -right-8 -top-8 w-16 h-16 bg-blue-500/5 rounded-full blur-2xl"></div>
                     <?php endif; ?>
-                    
+
                     <div class="flex justify-between items-center mb-4">
                         <div class="p-2.5 bg-<?= $color ?>-500/10 text-<?= $color ?>-400 rounded-xl relative z-10">
                             <i data-lucide="globe" class="w-5 h-5"></i>
@@ -456,12 +463,12 @@ try {
                             <?php endif; ?>
                         </div>
                     </div>
-                    
+
                     <div class="text-2xl font-black tracking-tighter truncate text-white relative z-10" title="<?= htmlspecialchars($w['vendor'] ?? '') ?>">
                         <?= $w['name'] ?>
                     </div>
                     <div class="text-slate-500 text-[11px] mt-1 font-mono font-bold uppercase tracking-widest truncate relative z-10"><?= $w['ip'] ?></div>
-                    
+
                     <?php if (count($wans) > 1 || $is_wan1): ?>
                     <div class="mt-3 flex items-center justify-between text-[12px] font-bold uppercase tracking-tighter border-t border-white/5 pt-2">
                         <span class="<?= $is_online ? 'text-slate-400' : 'text-slate-600' ?>"><?= formatBps($w['rx']) ?> ↓</span>
@@ -470,11 +477,10 @@ try {
                     </div>
                     <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
+                <?php dw_end(); endforeach; ?>
             <?php endif; ?>
 
-
-
+            <?php dw_start('local_in'); ?>
             <!-- 9. Incoming Connections -->
             <div onclick="openWanSessionsModal()" class="glass-card p-6 stat-glow-emerald relative overflow-hidden group cursor-pointer hover:scale-[1.02] transition-all">
                 <div class="flex justify-between items-center mb-5">
@@ -501,6 +507,7 @@ try {
                 <?php endif; ?>
             </div>
 
+            <?php dw_end(); dw_start('local_out'); ?>
             <!-- 10. Outgoing Connections -->
             <div onclick="openWanSessionsModal()" class="glass-card p-6 stat-glow-amber relative overflow-hidden group cursor-pointer hover:scale-[1.02] transition-all">
                 <div class="flex justify-between items-center mb-5">
@@ -526,7 +533,8 @@ try {
                 </div>
             <?php endif; ?>
             </div>
-            
+
+            <?php dw_end(); dw_start('packet_loss'); ?>
             <!-- 8. Packet Loss -->
             <div class="glass-card p-6 stat-glow-amber">
                 <div class="flex justify-between items-center mb-5">
@@ -539,6 +547,7 @@ try {
                 <div class="text-slate-500 text-[12px] mt-1 font-black uppercase tracking-[0.2em]"><?= __('dashboard.packet_loss') ?></div>
             </div>
 
+            <?php dw_end(); dw_start('latency', 1, 'auto'); ?>
             <!-- 7. Latency -->
             <div class="glass-card p-5 stat-glow-blue cursor-pointer transition hover:scale-[1.02] active:scale-95 group relative overflow-hidden" onclick="openPingModal()">
                 <div class="flex justify-between items-center mb-4">
@@ -547,7 +556,7 @@ try {
                     </div>
                     <span class="text-[12px] font-black text-slate-500 uppercase tracking-widest"><?= __('dashboard.ping_ms') ?></span>
                 </div>
-                
+
                 <div class="space-y-2 relative z-10">
                     <div class="flex justify-between items-center bg-white/[0.02] p-2 rounded-lg border border-white/5">
                         <div class="flex items-center gap-2">
@@ -571,16 +580,12 @@ try {
                         <span id="ping-val-wp.pl" class="text-sm font-black text-white font-mono">--</span>
                     </div>
                 </div>
-                
+
                 <div class="mt-3 text-[10px] text-slate-600 font-bold uppercase tracking-widest text-center"><?= __('dashboard.network_latency') ?></div>
             </div>
-        </div>
-
-        <!-- Ta sama siatka pięciu kolumn i ten sam odstęp co w rzędzie kafelków statystyk
-             u góry strony — dzięki temu krawędzie paneli trafiają w krawędzie kafelków. -->
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-12">
+            <?php dw_end(); dw_start('wan_chart', 3, 'auto'); ?>
             <!-- WAN Status & Live Chart -->
-            <div class="lg:col-span-3 glass-card p-8 self-start">
+            <div class="glass-card p-8">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
                     <div>
                         <div class="flex items-center gap-3 mb-1">
@@ -647,8 +652,9 @@ try {
                 </div>
             </div>
 
+            <?php dw_end(); dw_start('vlan', 2, 'auto'); ?>
             <!-- VLAN List -->
-            <div class="lg:col-span-2 glass-card p-8 flex flex-col">
+            <div class="glass-card p-8 flex flex-col">
                 <div class="flex items-center gap-3 mb-8">
                     <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
                          <i data-lucide="layers" class="w-5 h-5"></i>
@@ -688,6 +694,7 @@ try {
                     <?= __('dashboard.auto_subnet_detection') ?>
                 </div>
             </div>
+            <?php dw_end(); ?>
 
             <?php
         // Top talkers — liczniki rx_bytes/tx_bytes ze stat/sta są skumulowane OD MOMENTU
@@ -711,14 +718,9 @@ try {
         $tt_max = $top_talkers ? max(1, $top_talkers[0]['total']) : 1;
         $access_objects = get_access_objects();
         ?>
-        </div>
 
-        <?php if ($top_talkers || $access_objects): ?>
-        <!-- Siatka pięciu kolumn taka sama jak w rzędzie kafelków statystyk u góry strony,
-             więc col-span-3 daje dokładnie szerokość trzech kafelków (z ich odstępami). -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
-            <?php if ($top_talkers): ?>
-            <div class="glass-card p-6 sm:col-span-2 lg:col-span-3">
+            <?php if ($top_talkers): dw_start('top_talkers', 3, 2); ?>
+            <div class="glass-card p-6">
                 <div class="flex items-center gap-3 mb-6">
                     <div class="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400">
                         <i data-lucide="trending-up" class="w-5 h-5"></i>
@@ -750,11 +752,11 @@ try {
                     <?php endforeach; ?>
                 </div>
             </div>
-            <?php endif; ?>
+            <?php dw_end(); endif; ?>
 
-            <?php if ($access_objects): ?>
+            <?php if ($access_objects): dw_start('access', 2, 'auto'); ?>
             <!-- Kontrola dostępu: obiekty z Settings → Objects w konsoli, przełączane stąd -->
-            <div class="glass-card p-6 sm:col-span-2 lg:col-span-2" id="access-card">
+            <div class="glass-card p-6" id="access-card">
                 <div class="flex items-center gap-3 mb-6">
                     <div class="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-400">
                         <i data-lucide="shield-ban" class="w-5 h-5"></i>
@@ -788,11 +790,11 @@ try {
                     <?php endforeach; ?>
                 </div>
             </div>
-            <?php endif; ?>
-        </div>
-        <?php endif; ?>
+            <?php dw_end(); endif; ?>
 
+        <?php dw_render(); ?>
     </div>
+    <?php dw_render_editor(); ?>
 
 
     <!-- Modal: Ping/Latency Details -->
@@ -806,7 +808,7 @@ try {
                     </h2>
                     <p class="text-slate-500 text-xs mt-1"><?= __('modals.ping_details_desc') ?></p>
                 </div>
-                
+
                 <div class="flex items-center gap-4">
                      <div class="flex items-center gap-2">
                         <input type="text" id="custom-ping-ip" placeholder="IP / Hostname" class="bg-slate-900/50 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 w-32 placeholder:text-slate-600" onkeydown="if(event.key==='Enter') addPingHost()">
@@ -870,10 +872,10 @@ try {
                          </select>
                          <select id="filter-vlan" onchange="filterClients()" class="bg-slate-900/50 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer hover:bg-slate-800 transition-colors">
                              <option value="all"><?= __('common.all_networks') ?></option>
-                             <?php 
+                             <?php
                                 $all_vlans = get_vlans();
                                 ksort($all_vlans);
-                                foreach($all_vlans as $id => $name): 
+                                foreach($all_vlans as $id => $name):
                              ?>
                                 <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
                              <?php endforeach; ?>
@@ -897,12 +899,12 @@ try {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/5">
-                        <?php foreach ($clients as $client): 
+                        <?php foreach ($clients as $client):
                             $mac = normalize_mac($client['macAddress'] ?? $client['mac'] ?? '');
                             $client_name = $client['name'] ?? $client['hostname'] ?? __('common.unknown');
                             $ip = $client['ipAddress'] ?? $client['ip'] ?? 'N/A';
                             $vlan = $client['vlan'] ?? 0;
-                            
+
                             if (empty($mac) && ($client['is_vpn'] ?? false)) {
                                 $seed = $client_name . $ip;
                                 $hash = md5($seed);
@@ -915,9 +917,9 @@ try {
                             $essid = $client['essid'] ?? '';
                             $is_vpn = $client['is_vpn'] ?? false;
                             $signal = $client['signal'] ?? 0;
-                            
+
                             $type_label = $is_vpn ? 'vpn' : ($is_wired ? 'wired' : 'wifi');
-                            
+
                             // rx_rate/tx_rate sa juz w bitach/s (ustawia je client_rate_bps
                             // przy scalaniu powyzej) — mnozenie przez 8 zawyzalo odczyt osmiokrotnie.
                             $rx = isset($client['rx_rate']) ? (float)$client['rx_rate'] : client_rate_bps($client, 'rx');
@@ -952,7 +954,7 @@ try {
                             <td class="py-5 px-4">
                                 <div class="flex flex-col">
                                     <div class="flex items-center gap-2">
-                                        <?php 
+                                        <?php
                                         $vpn_label_display = 'Standard VPN';
                                         if ($is_vpn) {
                                             if (!isset($global_vpn_networks)) { $global_vpn_networks = get_vpn_networks(); }
@@ -1007,18 +1009,18 @@ try {
                             </td>
                             <td class="py-5 px-6 text-right">
                                 <div class="flex items-center justify-end gap-3">
-                                    <button onclick="toggleMonitor('<?= $mac ?>', '<?= addslashes($client_name) ?>', '<?= $vlan ?>', this)" 
-                                            class="p-2.5 <?= $is_monitored ? 'text-blue-400 bg-blue-500/10 hover:bg-blue-600/20' : 'text-slate-500 bg-slate-800/50 hover:bg-slate-700' ?> rounded-xl transition border border-white/5" 
+                                    <button onclick="toggleMonitor('<?= $mac ?>', '<?= addslashes($client_name) ?>', '<?= $vlan ?>', this)"
+                                            class="p-2.5 <?= $is_monitored ? 'text-blue-400 bg-blue-500/10 hover:bg-blue-600/20' : 'text-slate-500 bg-slate-800/50 hover:bg-slate-700' ?> rounded-xl transition border border-white/5"
                                             title="<?= $is_monitored ? __('devices_table.monitor_disable') : __('devices_table.monitor_enable') ?>">
                                         <i data-lucide="<?= $is_monitored ? 'bell' : 'bell-off' ?>" class="w-4.5 h-4.5"></i>
                                     </button>
                                     <?php if ($is_monitored): ?>
-                                    <a href="history.php?mac=<?= urlencode($mac) ?>" 
+                                    <a href="history.php?mac=<?= urlencode($mac) ?>"
                                        class="p-2.5 bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition border border-white/5" title="<?= __('devices_table.event_history') ?>">
                                         <i data-lucide="scroll-text" class="w-4.5 h-4.5"></i>
                                     </a>
                                     <?php endif; ?>
-                                    <button onclick='openClientDetail(<?= json_encode($client) ?>)' 
+                                    <button onclick='openClientDetail(<?= json_encode($client) ?>)'
                                             class="p-2.5 bg-blue-500/10 hover:bg-blue-600/20 text-blue-400 rounded-xl transition border border-blue-500/20" title="<?= __('common.details') ?>">
                                         <i data-lucide="maximize-2" class="w-4.5 h-4.5"></i>
                                     </button>
@@ -1105,7 +1107,7 @@ try {
             </div>
             <div class="max-h-[70vh] overflow-y-auto p-6 custom-scrollbar">
                 <div class="space-y-12">
-                    <?php 
+                    <?php
                     // 0. Build Map for Uplink Names
                     $dev_mac_to_name = [];
                     foreach ($trad_devices as $td) {
@@ -1119,18 +1121,18 @@ try {
                         'Access' => [],
                         'Talk' => []
                     ];
-                    
+
                     foreach ($trad_devices as $d) {
                         $type = $d['type'] ?? '';
                         if (in_array($type, ['uap', 'usw', 'ugw', 'udm', 'uxg'])) {
                             $grouped_infr['Network'][] = $d;
                         } else {
                             // Basic heuristic for other apps if any reveal themselves in this API
-                            $grouped_infr['Network'][] = $d; 
+                            $grouped_infr['Network'][] = $d;
                         }
                     }
-                    
-                    foreach ($grouped_infr as $app => $devs): 
+
+                    foreach ($grouped_infr as $app => $devs):
                         if (empty($devs)) continue;
                     ?>
                         <div class="space-y-4">
@@ -1151,11 +1153,11 @@ try {
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-white/5">
-                                        <?php foreach ($devs as $d): 
+                                        <?php foreach ($devs as $d):
                                             $state = $d['state'] ?? 0; // 0=disconnected, 1=connected
                                             $status_color = ($state == 1) ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : (($state == 0) ? 'bg-red-500' : 'bg-amber-500');
                                             $status_text = ($state == 1) ? 'Connected' : (($state == 0) ? 'Disconnected' : 'Pending');
-                                            
+
                                             // Uplink resolving
                                             $uplink_mac = $d['uplink']['uplink_mac'] ?? '';
                                             $uplink_name = '-';
@@ -1181,7 +1183,7 @@ try {
                                                             <i data-lucide="<?= ($d['type'] == 'uap') ? 'wifi' : (($d['type'] == 'usw') ? 'layers' : 'shield') ?>" class="w-4 h-4"></i>
                                                         </div>
                                                         <div class="flex flex-col">
-                                                            <?php 
+                                                            <?php
                                                                 $displayName = $d['name'] ?? $d['hostname'] ?? $d['model'] ?? 'Unknown';
                                                                 $subName = ($displayName === $d['model']) ? ($d['mac'] ?? '') : ($d['model'] ?? '');
                                                             ?>
@@ -1313,7 +1315,7 @@ try {
                 { name: 'Google', host: '8.8.8.8' },
                 { name: 'WP.pl', host: 'wp.pl' }
             ];
-            
+
             fetch('api_ping.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1518,7 +1520,7 @@ try {
                         });
                     }
 
-                    
+
                     // Animate refresh button icon if exists
                     const btn = document.querySelector('button[title="<?= __('dashboard.refresh_data') ?>"] i');
                     if(btn) {
@@ -1547,7 +1549,7 @@ try {
                 console.error('Refresh clients failed:', e);
             }
         };
-        
+
         // Alias for navbar button
         window.refreshDashboard = window.updateStats;
 
@@ -1594,7 +1596,7 @@ try {
             const searchInput = document.getElementById('filter-search');
             const searchValue = searchInput.value.toLowerCase();
             const isExactMatch = searchInput.getAttribute('data-exact-match') === 'true';
-            
+
             const typeValue = document.getElementById('filter-type').value;
             const vlanValue = document.getElementById('filter-vlan').value;
             const rows = document.querySelectorAll('.client-row');
@@ -1607,7 +1609,7 @@ try {
 
                 const typeMatch = (typeValue === 'all' || rowType === typeValue);
                 const vlanMatch = (vlanValue === 'all' || rowVlan === vlanValue);
-                
+
                 let searchMatch = false;
                 if (searchValue === '') {
                     searchMatch = true;
@@ -1624,13 +1626,13 @@ try {
         function filterByWifi(ssid) {
             closeWifiModal();
             openClientsModal();
-            
+
             document.getElementById('filter-type').value = 'wifi';
-            
+
             const searchInput = document.getElementById('filter-search');
             searchInput.value = ssid;
             searchInput.setAttribute('data-exact-match', 'true');
-            
+
             filterClients();
         }
 
@@ -1640,29 +1642,29 @@ try {
             const rows = Array.from(tbody.rows);
             const isAsc = table.getAttribute('data-sort-dir') === 'asc' && table.getAttribute('data-sort-col') == n;
             const dir = isAsc ? -1 : 1;
-            
+
             rows.sort((a, b) => {
                 let x = a.cells[n].textContent.toLowerCase().trim();
                 let y = b.cells[n].textContent.toLowerCase().trim();
-                
+
                 // IP Address special handling
                 if (n === 3) {
                     x = x.split('\n')[0].trim().split('.').map(num => num.padStart(3, '0')).join('.');
                     y = y.split('\n')[0].trim().split('.').map(num => num.padStart(3, '0')).join('.');
                 }
-                
+
                 // Uptime column special handling (n=4)
                 if (n === 4) {
                     x = parseInt(a.cells[n].querySelector('[data-uptime]')?.getAttribute('data-uptime') || 0);
                     y = parseInt(b.cells[n].querySelector('[data-uptime]')?.getAttribute('data-uptime') || 0);
                     return (x - y) * dir;
                 }
-                
+
                 if (x < y) return -1 * dir;
                 if (x > y) return 1 * dir;
                 return 0;
             });
-            
+
             rows.forEach(row => tbody.appendChild(row));
             table.setAttribute('data-sort-dir', isAsc ? 'desc' : 'asc');
             table.setAttribute('data-sort-col', n);
@@ -1671,7 +1673,7 @@ try {
         function openClientDetail(client) {
             const modal = document.getElementById('clientInfoModal');
             const content = document.getElementById('client-info-content');
-            
+
             // Map UniFi keys to common format
             const name = client.name || client.hostname || '<?= __('common.unknown') ?>';
             const mac = client.mac || client.macAddress || 'no-mac';
@@ -1771,7 +1773,7 @@ try {
                                 </div>
                             </div>
                         </div>
-                        
+
                         ${signal ? `
                         <div class="p-4 bg-slate-800/20 rounded-2xl border border-white/5">
                             <span class="text-xs font-black text-slate-600 uppercase tracking-widest block mb-2"><?= __('common.signal_strength') ?></span>
@@ -1784,7 +1786,7 @@ try {
                         </div>
                         ` : ''}
                     </div>
-                    
+
                     <div class="mt-8 flex gap-3">
                         <a href="history.php?mac=${encodeURIComponent(mac)}" class="flex-1 flex items-center justify-center gap-2 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition shadow-xl shadow-blue-600/20 text-sm">
                             <i data-lucide="scroll-text" class="w-4 h-4"></i>
@@ -1799,7 +1801,7 @@ try {
                     </div>
                 </div>
             `;
-            
+
             modal.classList.add('active');
             lucide.createIcons();
 
@@ -1861,21 +1863,21 @@ try {
             if (d > 0) parts.push(`${d}d`);
             if (h > 0) parts.push(`${h}h`);
             if (m > 0 || parts.length === 0) parts.push(`${m}min`);
-            
+
             return parts.join(" ");
         }
 
         async function toggleMonitor(mac, name, vlan, btn) {
             const isMonitored = btn.querySelector('svg')?.classList.contains('lucide-bell') || btn.querySelector('i')?.getAttribute('data-lucide') === 'bell';
             const action = isMonitored ? 'delete' : 'add';
-            
+
             try {
                 const response = await fetch('api_toggle_monitor.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mac, name, vlan, action })
                 });
-                
+
                 const text = await response.text();
                 let result;
                 try {
@@ -1889,7 +1891,7 @@ try {
                 if (result.success) {
                     // Show success toast
                     showToast(action === 'add' ? '<?= __('settings.asset_saved') ?>' : '<?= __('settings.asset_deleted') ?>', 'success');
-                    
+
                     // Refresh current page if on monitored.php to show results immediately
                     if (window.location.pathname.includes('monitored.php')) {
                         window.location.reload();
@@ -1902,7 +1904,7 @@ try {
                         btn.className = "p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-600/20 rounded-lg transition border border-white/5";
                         btn.innerHTML = '<i data-lucide="bell" class="w-4 h-4"></i>';
                         btn.title = '<?= __('devices_table.monitor_disable') ?>';
-                        
+
                         if (histBtn) {
                              histBtn.classList.remove('hidden');
                         } else {
@@ -1917,7 +1919,7 @@ try {
                         btn.className = "p-2 text-slate-500 bg-slate-800 hover:bg-slate-700 rounded-lg transition border border-white/5";
                         btn.innerHTML = '<i data-lucide="bell-off" class="w-4 h-4"></i>';
                         btn.title = '<?= __('devices_table.monitor_enable') ?>';
-                        
+
                         if (histBtn) histBtn.classList.add('hidden');
                     }
                     lucide.createIcons();
@@ -2005,7 +2007,7 @@ try {
         function initPingChart() {
             const ctx = document.getElementById('pingChart').getContext('2d');
             if (pingChart) pingChart.destroy();
-            
+
             pingChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -2031,7 +2033,7 @@ try {
                     }
                 }
             });
-            
+
             // Also update real WAN Packet Loss and Health
             fetch('api_wan_health.php')
             .then(r => r.json())
@@ -2048,7 +2050,7 @@ try {
 
         function startPingPolling() {
             if (pingInterval) clearTimeout(pingInterval);
-            fetchPingData(); 
+            fetchPingData();
         }
 
         function stopPingPolling() {
@@ -2070,17 +2072,17 @@ try {
             const input = document.getElementById('custom-ping-ip');
             const val = input.value.trim();
             if (!val) return;
-            
+
             if (pingHosts.find(h => h.host === val)) {
                 alert('Ten host jest już na liście.');
                 return;
             }
-            
+
             pingHosts.push({ name: val, host: val });
             input.value = '';
-            
+
             stopPingPolling();
-            startPingPolling(); 
+            startPingPolling();
         }
 
         function removePingHost(host) {
@@ -2101,7 +2103,7 @@ try {
                 });
                 const json = await res.json();
                 const data = json.data || [];
-                
+
                 updatePingChart(data);
                 updatePingGrid(data);
             } catch (e) {
@@ -2117,7 +2119,7 @@ try {
         function updatePingGrid(data) {
             const grid = document.getElementById('ping-hosts-grid');
             if (!grid) return;
-            
+
             grid.innerHTML = data.map(h => {
                 const isOnline = h.status === 'online';
                 const color = isOnline ? (h.latency < 50 ? 'emerald' : (h.latency < 100 ? 'amber' : 'red')) : 'red';
@@ -2143,7 +2145,7 @@ try {
 
         function updatePingChart(data) {
             if (!pingChart) return;
-            
+
             const now = new Date();
             const timeLabel = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
 
@@ -2160,7 +2162,7 @@ try {
                     // Define colors
                     const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6'];
                     const color = colors[index % colors.length];
-                    
+
                     dataset = {
                         label: h.name,
                         data: [],

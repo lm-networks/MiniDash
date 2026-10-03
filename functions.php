@@ -2827,7 +2827,10 @@ function render_personal_modal() {
                 </div>
             </form>
 
-            <div class="p-6 bg-slate-950/50 border-t border-white/5 flex justify-end shrink-0">
+            <div class="p-6 bg-slate-950/50 border-t border-white/5 flex flex-wrap justify-between gap-3 shrink-0">
+                <button type="button" onclick="startDashboardEdit()" class="px-6 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 font-black rounded-2xl transition text-[11px] uppercase tracking-[0.2em] flex items-center justify-center gap-2">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i> <?= __('dash_edit.configure') ?>
+                </button>
                 <button type="submit" form="personalForm" class="px-12 py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl transition shadow-xl shadow-blue-600/20 text-[11px] uppercase tracking-[0.2em] flex items-center justify-center gap-2">
                      Zapisz Dane
                 </button>
@@ -2845,6 +2848,12 @@ function render_personal_modal() {
             } else {
                 console.error('personalModal not found!');
             }
+        }
+
+        function startDashboardEdit() {
+            closePersonalModal();
+            if (window.dashEdit && document.getElementById('dash-grid')) window.dashEdit.enter();
+            else location.href = 'index.php?edit_dashboard=1';
         }
 
         function closePersonalModal(e) {
@@ -3497,6 +3506,12 @@ function render_nav($title = "MiniDash", $stats = []) {
             } else {
                 console.error('personalModal not found!');
             }
+        }
+
+        function startDashboardEdit() {
+            closePersonalModal();
+            if (window.dashEdit && document.getElementById('dash-grid')) window.dashEdit.enter();
+            else location.href = 'index.php?edit_dashboard=1';
         }
 
         function closePersonalModal(e) {
