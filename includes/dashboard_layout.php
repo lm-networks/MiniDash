@@ -167,11 +167,14 @@ function dw_render(): void
             tile = Math.min(260, Math.max(140, tile || 176));
             // Telefon (jedna kolumna): małe kafelki w naturalnej wysokości — równanie rzędów nie ma tu sensu.
             const oneCol = cs.gridTemplateColumns.trim().split(/\s+/).length === 1;
+            // Liczymy w rzędach siatki, nie w pikselach: kafelek „N" = N × rzędy jednego kafelka.
+            // Inaczej zaokrąglenie do rzędu 8 px rozjeżdża krawędzie (2 kafelki ≠ 2 × 1 kafelek).
+            const rows = px => Math.max(1, Math.ceil((px + gap) / (row + gap)));
+            const tileRows = rows(tile);
             items.forEach(el => {
                 let n = el.dataset.h === 'auto' ? 0 : +el.dataset.h;
                 if (oneCol && n === 1 && el.dataset.w === '1') n = 0;
-                const px = n ? n * tile + (n - 1) * gap : natural(cardOf(el));
-                el.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil((px + gap) / (row + gap)));
+                el.style.gridRowEnd = 'span ' + (n ? n * tileRows : rows(natural(cardOf(el))));
             });
         }
         function schedule() { if (!queued) { queued = true; requestAnimationFrame(run); } }

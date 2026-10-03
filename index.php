@@ -583,9 +583,9 @@ try {
 
                 <div class="mt-3 text-[10px] text-slate-600 font-bold uppercase tracking-widest text-center"><?= __('dashboard.network_latency') ?></div>
             </div>
-            <?php dw_end(); dw_start('wan_chart', 3, 'auto'); ?>
+            <?php dw_end(); dw_start('wan_chart', 3, 2); ?>
             <!-- WAN Status & Live Chart -->
-            <div class="glass-card p-8">
+            <div class="glass-card p-8 flex flex-col">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
                     <div>
                         <div class="flex items-center gap-3 mb-1">
@@ -647,7 +647,7 @@ try {
                 </div>
                 <?php endif; ?>
 
-                <div class="h-[280px] w-full">
+                <div class="w-full min-h-[160px]" style="flex: 1 1 280px;">
                     <canvas id="wanLiveChart"></canvas>
                 </div>
             </div>
