@@ -13,6 +13,10 @@ try {
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $db->exec("PRAGMA journal_mode=WAL");
     $db->exec("PRAGMA foreign_keys=ON");
+    // Poller z przeglądarki i cron potrafią trafić w bazę w tej samej sekundzie. Bez
+    // busy_timeout SQLite zwraca "database is locked" natychmiast i cykl przepada —
+    // takie wpisy są w logs/cron_errors.log. 5 s czekania kosztuje mniej niż zgubione dane.
+    $db->exec("PRAGMA busy_timeout=5000");
 } catch (PDOException $e) {
     die("Database error: " . $e->getMessage());
 }

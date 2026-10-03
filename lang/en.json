@@ -109,6 +109,8 @@
         "wan_link": "WAN Link",
         "vlan_segmentation": "VLAN Segmentation",
         "auto_subnet_detection": "Automatic real-time subnet detection.",
+        "top_talkers": "Top talkers",
+        "top_talkers_desc": "Traffic since the client connected",
         "sum_in": "SUM IN",
         "sum_out": "SUM OUT",
         "refresh_data": "Refresh data",
@@ -557,7 +559,12 @@
         "vpn_alert_desc": "Alert on VPN connect/disconnect events",
         "offline_grace": "Offline Tolerance (anti-flapping)",
         "offline_grace_desc": "Ignore brief network dropouts (roaming, WiFi sleep) before sending an OFFLINE alert",
-        "offline_grace_label": "Grace threshold (s) — 0 = disabled"
+        "offline_grace_label": "Grace threshold (s) — 0 = disabled",
+        "wan_alert": "WAN Link Alert",
+        "wan_alert_desc": "Alert when a WAN link goes down or comes back (failover)",
+        "daily_report": "Daily Report",
+        "daily_report_desc": "Traffic, availability and event summary once a day",
+        "daily_report_hour": "Delivery hour"
     },
     "threats": {
         "page_title": "Threat Watch",

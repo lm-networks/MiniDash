@@ -86,7 +86,10 @@ $newConfig = [
         'latency_alert_enabled' => isset($_POST['latency_alert_enabled']) && ($_POST['latency_alert_enabled'] === 'true' || $_POST['latency_alert_enabled'] === 'on'),
         'latency_threshold_ms' => (int)($_POST['latency_threshold_ms'] ?? 100),
         'vpn_alert_enabled' => isset($_POST['vpn_alert_enabled']) && ($_POST['vpn_alert_enabled'] === 'true' || $_POST['vpn_alert_enabled'] === 'on'),
-        'offline_grace_sec' => max(0, (int)($_POST['offline_grace_sec'] ?? 60))
+        'offline_grace_sec' => max(0, (int)($_POST['offline_grace_sec'] ?? 60)),
+        'wan_alert_enabled' => isset($_POST['wan_alert_enabled']) && ($_POST['wan_alert_enabled'] === 'true' || $_POST['wan_alert_enabled'] === 'on'),
+        'daily_report_enabled' => isset($_POST['daily_report_enabled']) && ($_POST['daily_report_enabled'] === 'true' || $_POST['daily_report_enabled'] === 'on'),
+        'daily_report_hour' => max(0, min(23, (int)($_POST['daily_report_hour'] ?? 8)))
     ]
 ];
 

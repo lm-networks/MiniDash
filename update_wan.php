@@ -31,61 +31,87 @@ try {
     }
     $devices = $resp['data'] ?? [];
     
+    // Brama z traditional API — po MAC-u z Integration API, a gdy ten nic nie zwrócił
+    // (albo model jest spoza listy) po obecności klucza wan1.
     $gateway = null;
     foreach ($devices as $d) {
         $model = strtoupper($d['model'] ?? '');
         $type = strtolower($d['type'] ?? '');
-        if (in_array($model, ['UDR', 'UDM', 'UXG', 'USG']) || 
-            strpos($model, 'DREAM') !== false || 
-            $type === 'udm' || 
+        if (in_array($model, ['UDR', 'UDM', 'UXG', 'USG']) ||
+            strpos($model, 'DREAM') !== false ||
+            $type === 'udm' ||
             $type === 'gateway' ||
             isset($d['wan1'])) {
             $gateway = $d;
             break;
         }
     }
-    
-    $rx = 0;
-    $tx = 0;
-    
+
+    $trad_gateway = null;
     if ($gateway) {
         $g_mac = normalize_mac($gateway['macAddress'] ?? $gateway['mac'] ?? '');
-        
-        // Find gateway in traditional stats
         foreach ($trad_devices as $td) {
-            if (normalize_mac($td['mac'] ?? '') === $g_mac) {
-                // Traditional API: rx_rate/tx_rate are in bps, rx_bytes-r is bytes/s (needs *8)
-                $rx = $td['wan1']['rx_rate'] ?? $td['wan1']['rxRateBps'] ?? 0;
-                if ($rx == 0) $rx = ($td['wan1']['rx_bytes-r'] ?? 0) * 8;
-                $tx = $td['wan1']['tx_rate'] ?? $td['wan1']['txRateBps'] ?? 0;
-                if ($tx == 0) $tx = ($td['wan1']['tx_bytes-r'] ?? 0) * 8;
-                break;
-            }
-        }
-        
-        // Fallback to integration stats if 0
-        if ($rx == 0) {
-            $rx = $gateway['uplink']['rxRateBps'] ?? $gateway['wan1']['rxRateBps'] ?? 0;
-            $tx = $gateway['uplink']['txRateBps'] ?? $gateway['wan1']['txRateBps'] ?? 0;
+            if (normalize_mac($td['mac'] ?? '') === $g_mac) { $trad_gateway = $td; break; }
         }
     }
-    
+    if (!$trad_gateway) $trad_gateway = find_trad_gateway($trad_devices);
+
+    $wan_links = get_wan_links($trad_gateway);
+
+    $rx = 0;
+    $tx = 0;
+    foreach ($wan_links as $l) {
+        $rx += $l['rx'];
+        $tx += $l['tx'];
+    }
+
+    // Fallback to integration stats if 0
+    if ($rx == 0 && $tx == 0 && $gateway) {
+        $rx = $gateway['uplink']['rxRateBps'] ?? $gateway['wan1']['rxRateBps'] ?? 0;
+        $tx = $gateway['uplink']['txRateBps'] ?? $gateway['wan1']['txRateBps'] ?? 0;
+    }
+
     // 3. Save History for Chart
     $history = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
     if (!is_array($history)) $history = [];
-    
+
+    // rx/tx to suma wszystkich łączy (wykres zbiorczy), wans[] rozbija ją na łącza.
+    // Starsze wpisy nie mają klucza wans — front musi to znieść.
     $history[] = [
         'timestamp' => time(),
         'rx' => (float)$rx,
-        'tx' => (float)$tx
+        'tx' => (float)$tx,
+        'wans' => array_map(fn($l) => [
+            'idx'  => $l['idx'],
+            'name' => $l['name'],
+            'ip'   => $l['ip'],
+            'up'   => $l['up'],
+            'rx'   => $l['rx'],
+            'tx'   => $l['tx'],
+        ], $wan_links)
     ];
-    
+
     if (count($history) > 60) $history = array_slice($history, -60);
     file_put_contents($file, json_encode($history));
 
     if (isset($db)) {
-        $stmt = $db->prepare("INSERT INTO wan_stats (rx_bytes, tx_bytes) VALUES (?, ?)");
-        $stmt->execute([$rx ?? 0, $tx ?? 0]);
+        // wan_idx = 0 → wiersz zbiorczy (zgodny z tym, co zapisywano wcześniej),
+        // 1..n → poszczególne łącza. Zapytania muszą filtrować po wan_idx.
+        // Jedna transakcja na cykl: przy dwóch łączach to trzy INSERT-y, a baza leży na
+        // udziale sieciowym, gdzie każde osobne zdjęcie blokady potrafi skończyć się
+        // "database is locked" (takie wpisy są już w logs/cron_errors.log).
+        $stmt = $db->prepare("INSERT INTO wan_stats (rx_bytes, tx_bytes, wan_idx, up) VALUES (?, ?, ?, ?)");
+        $db->beginTransaction();
+        try {
+            $stmt->execute([$rx ?? 0, $tx ?? 0, 0, 1]);
+            foreach ($wan_links as $l) {
+                $stmt->execute([$l['rx'], $l['tx'], $l['idx'], $l['up'] ? 1 : 0]);
+            }
+            $db->commit();
+        } catch (Exception $e) {
+            $db->rollBack();
+            throw $e;
+        }
     }
 
     // 4. Update Monitored Devices Status History

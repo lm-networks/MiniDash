@@ -46,6 +46,9 @@ if (!function_exists('sodium_crypto_secretbox_open')) {
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/functions.php';
+// Powitania SMS przy wejsciu/wyjsciu z VPN-a. Wszystko, co robi, jest owiniete
+// w try/catch we wlasnym pliku - crona nie ma prawa ruszyc.
+require_once __DIR__ . '/sms_powitania.php';
 
 $siteId = $config['site'];
 $cooldown_dir = __DIR__ . '/data';
@@ -244,6 +247,45 @@ try {
         }
     }
 
+    // === TRIGGER: WAN / Failover ===
+    // Łącze zapasowe milczy dopóki nie przejmie ruchu, więc bez tego wyzwalacza
+    // padnięcie WAN1 widać dopiero wtedy, gdy ktoś sam otworzy dashboard.
+    if ($config['triggers']['wan_alert_enabled'] ?? false) {
+        $dev_resp_wan = fetch_api("/proxy/network/api/s/$tradSite/stat/device");
+        $wan_links = get_wan_links(find_trad_gateway($dev_resp_wan['data'] ?? []));
+
+        // Pusta lista = brama nie odpowiedziała. Zapisanie tego jako "wszystko w dole"
+        // wygenerowałoby alert o awarii przy zwykłym timeoucie API.
+        if (!empty($wan_links)) {
+            $wan_state_file = __DIR__ . '/data/wan_links.json';
+            $prev_wan = file_exists($wan_state_file) ? json_decode(file_get_contents($wan_state_file), true) : null;
+            $wan_first_run = !is_array($prev_wan);
+            if (!is_array($prev_wan)) $prev_wan = [];
+
+            $wynik = evaluate_wan_transitions($wan_links, $prev_wan, $wan_first_run);
+            foreach ($wynik['alerts'] as $a) {
+                sendAlert($a['title'], $a['body'], $a['severity']);
+            }
+
+            file_put_contents($wan_state_file, json_encode($wynik['state']));
+        }
+    }
+
+    // === Raport dobowy ===
+    // Warunek to "godzina już minęła i dziś jeszcze nie wysłano", a nie równość godzin —
+    // inaczej jeden nieudany przebieg crona o właściwej porze gubi raport na cały dzień.
+    if ($config['triggers']['daily_report_enabled'] ?? false) {
+        $godzina_raportu = max(0, min(23, (int)($config['triggers']['daily_report_hour'] ?? 8)));
+        $plik_raportu = __DIR__ . '/data/last_daily_report.txt';
+        $ostatni = file_exists($plik_raportu) ? trim(file_get_contents($plik_raportu)) : '';
+        $dzis = date('Y-m-d');
+
+        if ($ostatni !== $dzis && (int)date('G') >= $godzina_raportu && isset($db)) {
+            sendAlert('Raport dobowy MiniDash', build_daily_report($db), 'info');
+            file_put_contents($plik_raportu, $dzis);
+        }
+    }
+
     // === TRIGGER: VPN Connection Alert (poll + diff) ===
     // stat/event zwraca 404 na tym UDR, wiec zamiast feedu zdarzen pollujemy liste aktywnych
     // sesji (stat/remoteuservpn) i wykrywamy roznice. Rozlaczenie ma 1-cyklowy grace, bo
@@ -287,6 +329,10 @@ try {
                         "Użytkownik **{$s['user']}** połączył się ($label).\n🌍 Źródło: **{$s['remote_ip']}** | 📡 Tunel: {$s['tunnel_ip']}",
                         'info'
                     );
+
+                    // Powitanie SMS-em - tylko dla osob wpisanych
+                    // w data/sms_powitania.json, reszta nic nie zauwazy.
+                    smsPowitanie($s['user'], 'up');
                 }
             }
             // Zniknięte sesje → rozłączono (1-cyklowy grace dla WireGuard)
@@ -301,6 +347,8 @@ try {
                         "Użytkownik **{$s['user']}** rozłączył się ($label)." . ($dur ? "\n⏱️ Czas sesji: $dur" : ''),
                         'warning'
                     );
+
+                    smsPowitanie($s['user'], 'down');
                     // misses>=2 → nie trafia do $next, czyli usuniete ze stanu
                 } else {
                     $s['misses'] = $misses;

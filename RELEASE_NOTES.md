@@ -1,5 +1,42 @@
 # MiniDash — Release Notes
 
+## v2.4.0 (2026-07-24)
+
+Drugie łącze WAN w całej aplikacji, alert failovera, raport dobowy i kafelek największych konsumentów.
+
+### Dual-WAN
+- Nowy helper `get_wan_links()` — jedno źródło prawdy o łączach dla dashboardu, pollera i wyzwalaczy. Zwraca **również łącza w dole**; wcześniej każdy z trzech konsumentów filtrował po `up`, więc łącze zapasowe nie istniało w UI dopóki nie przejęło ruchu
+- `find_trad_gateway()` szuka bramy po obecności klucza `wan1`, nie po liście modeli — `UCG Fiber` do tej pory w tej liście nie występował
+- **Fix: poller nigdy nie znajdował bramy na UCG Fiber** — `update_wan.php` dopasowywał model do listy `['UDR','UDM','UXG','USG']`, nie trafiał i zapisywał `rx=0, tx=0`. Wykres live i cała tabela `wan_stats` zawierały wyłącznie zera
+- Panel „Łącze WAN": pasek per łącze (status, IP, transfer) nad wykresem, aktualizowany na żywo. Pojawia się przy dwóch i więcej łączach
+- Wykres dokłada przerywaną linię pobierania per łącze — przy failoverze suma wygląda identycznie niezależnie od tego, które łącze niesie ruch
+- Status zbiorczy WAN to teraz „ONLINE, gdy żyje choć jedno łącze", a nie „gdy lista łączy jest niepusta"
+- `wan_stats` rozbite na łącza: migracja `004_wan_stats_multiwan.sql` dokłada `wan_idx` (0 = wiersz zbiorczy, 1..n = łącza) oraz `up` do liczenia dostępności
+
+### Alert failovera
+- Nowy wyzwalacz `triggers.wan_alert_enabled`: łącze padło → `critical`, wróciło → `info` z czasem przerwy
+- Treść alertu wymienia łącza, które nadal działają, albo mówi wprost „BRAK — sieć jest bez internetu"
+- Alert dopiero po dwóch cyklach w dole; pojedynczy nieudany odczyt przy renegocjacji łącza nie jest awarią
+- Pusta odpowiedź kontrolera nie zmienia stanu — timeout API nie wygeneruje fałszywej awarii
+- Logika w czystej funkcji `evaluate_wan_transitions()`, pokrytej testami; cron tylko wysyła to, co ona zwróci
+
+### Raport dobowy
+- `triggers.daily_report_enabled` + suwak godziny wysyłki; severity `info`, czyli topik Info na Telegramie
+- Zawiera: ruch WAN 24h (średnia, szczyt, szacowany wolumen), dostępność każdego łącza, zdarzenia wg severity, nowe urządzenia i transfer urządzeń monitorowanych
+- Warunek wysyłki to „godzina minęła i dziś jeszcze nie było", a nie równość godzin — jeden nieudany przebieg crona nie gubi raportu na cały dzień
+- Budowany wyłącznie z SQLite, bez odpytywania kontrolera: raport wyjdzie także wtedy, gdy API akurat leży
+- Nazwy urządzeń czyszczone ze znaków Markdown — pojedynczy `_` w nazwie wywracał parsowanie i cała wiadomość wracała z HTTP 400
+
+### Dashboard
+- Kafelek „Najwięksi konsumenci" o szerokości trzech kafelków statystyk (`col-span-3` w siatce pięciu kolumn): 5 klientów po sumie transferu, z podziałem na pobieranie/wysyłanie i czasem sesji. Liczniki są skumulowane od momentu połączenia klienta — stąd czas sesji obok, inaczej urządzenie wiszące w sieci od tygodnia zawsze bije rekordzistę z ostatniej godziny
+- Fix: `uptime` klienta dobierane z traditional API przy scalaniu list — Integration API go nie zwraca, więc czas sesji zawsze wynosił `0s`
+
+### Baza
+- `PRAGMA busy_timeout=5000` — poller z przeglądarki i cron trafiały w bazę jednocześnie, a SQLite zwracał „database is locked" natychmiast i cykl przepadał
+- Zapis próbek WAN w jednej transakcji zamiast trzech osobnych INSERT-ów
+
+---
+
 ## v2.3.3 (2026-07-24)
 
 Powiadomienia Telegrama do topików grupy, naprawa jednostek transferu i alertu prędkości.

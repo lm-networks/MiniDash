@@ -1389,6 +1389,263 @@ function client_rate_bps(array $client, string $kierunek = 'rx'): float
     return (float)(($client['rx_bytes-r'] ?? $client['wired-rx_bytes-r'] ?? 0) * 8);
 }
 
+/**
+ * Wyszukuje bramę wśród urządzeń z traditional API (stat/device).
+ *
+ * Lista modeli w in_array() nie wystarcza: kontroler potrafi zwrócić model spoza niej
+ * (np. "UCG Fiber"), a wtedy brama znika razem z całą sekcją WAN. Obecność klucza
+ * wan1 jest cechą bramy niezależną od nazwy modelu, więc sprawdzamy ją jako pierwszą.
+ */
+function find_trad_gateway(array $trad_devices): ?array
+{
+    foreach ($trad_devices as $d) {
+        if (!is_array($d)) continue;
+        if (isset($d['wan1']) || in_array($d['type'] ?? '', ['ugw', 'udm', 'uxg', 'u-wan'], true)) {
+            return $d;
+        }
+    }
+    return null;
+}
+
+/**
+ * Normalizuje łącza WAN bramy do jednej listy — wspólne źródło prawdy dla dashboardu,
+ * pollera i wyzwalaczy.
+ *
+ * Zwraca RÓWNIEŻ łącza wyłączone (up=false). Wcześniej każdy z trzech konsumentów
+ * filtrował po `up`, przez co łącze zapasowe w trybie failover nie istniało w UI
+ * dopóki nie przejęło ruchu — czyli dokładnie wtedy, kiedy najbardziej trzeba je widzieć.
+ *
+ * Jednostki: rx/tx w bitach/s (traditional API podaje rx_bytes-r w BAJTACH/s, stąd *8),
+ * rx_total/tx_total to liczniki skumulowane w bajtach.
+ */
+function get_wan_links(?array $trad_gateway): array
+{
+    if (empty($trad_gateway)) return [];
+
+    $links = [];
+    for ($i = 1; $i <= 4; $i++) {
+        $key = "wan{$i}";
+        if (empty($trad_gateway[$key]) || !is_array($trad_gateway[$key])) continue;
+        $w  = $trad_gateway[$key];
+        $up = (bool)($w['up'] ?? false);
+
+        // Port bez konfiguracji potrafi wystawić pusty obiekt wanN — nie robimy z niego
+        // widmowego łącza OFFLINE u ludzi z jednym WAN-em.
+        $disabled = isset($w['enable']) && !$w['enable'];
+        if (!$up && ($disabled || (empty($w['ip']) && empty($w['ifname']) && empty($w['name'])))) continue;
+
+        $links[] = [
+            'idx'      => $i,
+            'key'      => $key,
+            'name'     => 'WAN' . $i,
+            'up'       => $up,
+            'status'   => $up ? 'ONLINE' : 'OFFLINE',
+            'ip'       => $w['ip'] ?? 'N/A',
+            'ifname'   => $w['ifname'] ?? $w['name'] ?? '',
+            'rx'       => (float)($w['rx_bytes-r'] ?? 0) * 8,
+            'tx'       => (float)($w['tx_bytes-r'] ?? 0) * 8,
+            'rx_total' => (float)($w['rx_bytes'] ?? 0),
+            'tx_total' => (float)($w['tx_bytes'] ?? 0),
+            'latency'  => (float)($w['latency'] ?? 0),
+            'uptime'   => (int)($w['uptime'] ?? 0),
+        ];
+    }
+
+    // Brama bez kluczy wanN (starsze USG, część UXG) — agregat ze stat/gw jako jedno łącze.
+    if (empty($links)) {
+        $rx = (float)($trad_gateway['stat']['gw']['wan_rx_bytes-r'] ?? $trad_gateway['rx_bytes-r'] ?? 0) * 8;
+        $tx = (float)($trad_gateway['stat']['gw']['wan_tx_bytes-r'] ?? $trad_gateway['tx_bytes-r'] ?? 0) * 8;
+        if ($rx > 0 || $tx > 0) {
+            $links[] = [
+                'idx' => 1, 'key' => 'wan1', 'name' => 'WAN (Auto)', 'up' => true, 'status' => 'ONLINE',
+                'ip' => $trad_gateway['wan1']['ip'] ?? $trad_gateway['ip'] ?? 'N/A', 'ifname' => '',
+                'rx' => $rx, 'tx' => $tx, 'rx_total' => 0, 'tx_total' => 0, 'latency' => 0, 'uptime' => 0,
+            ];
+        }
+    }
+
+    return $links;
+}
+
+/**
+ * Porównuje bieżący stan łączy WAN z poprzednim i zwraca alerty do wysłania
+ * wraz z nowym stanem do zapisania.
+ *
+ * Czysta funkcja (bez I/O i bez wysyłki), bo inaczej jedynym sposobem na sprawdzenie
+ * tej logiki byłoby fizyczne wyłączenie łącza.
+ *
+ * @param array $links      wynik get_wan_links()
+ * @param array $prev_state stan z poprzedniego cyklu: [idx => ['pending','alerted','down_since']]
+ * @param bool  $first_run  pierwszy przebieg — zapamiętujemy stan, ale nie alarmujemy
+ * @return array ['alerts' => [['title','body','severity']], 'state' => [...]]
+ */
+function evaluate_wan_transitions(array $links, array $prev_state, bool $first_run): array
+{
+    $alerts = [];
+    $state  = [];
+
+    $aktywne = array_values(array_filter($links, fn($l) => !empty($l['up'])));
+    $opis_aktywnych = $aktywne
+        ? implode(', ', array_map(fn($l) => $l['name'] . ' (' . $l['ip'] . ')', $aktywne))
+        : 'BRAK — sieć jest bez internetu';
+
+    foreach ($links as $l) {
+        $idx  = (string)$l['idx'];
+        $stan = $prev_state[$idx] ?? ['pending' => 0, 'alerted' => false, 'down_since' => 0];
+
+        if (!empty($l['up'])) {
+            if (!empty($stan['alerted'])) {
+                $przerwa = !empty($stan['down_since']) ? formatDuration(time() - (int)$stan['down_since']) : '';
+                $alerts[] = [
+                    'title' => "{$l['name']} wrócił",
+                    'body' => "Łącze {$l['name']} ({$l['ip']}) znów działa."
+                        . ($przerwa ? "\n⏱️ Przerwa: $przerwa" : '')
+                        . "\n🔌 Aktywne łącza: $opis_aktywnych",
+                    'severity' => 'info',
+                ];
+            }
+            $stan = ['pending' => 0, 'alerted' => false, 'down_since' => 0];
+        } else {
+            $stan['pending'] = (int)($stan['pending'] ?? 0) + 1;
+            if (empty($stan['down_since'])) $stan['down_since'] = time();
+
+            // Alert dopiero po dwóch cyklach: pojedynczy nieudany odczyt statusu przy
+            // renegocjacji łącza (PPPoE, DHCP lease) nie jest awarią.
+            if (!$first_run && $stan['pending'] >= 2 && empty($stan['alerted'])) {
+                $alerts[] = [
+                    'title' => "{$l['name']} padł",
+                    'body' => "Łącze {$l['name']} ({$l['ip']}) nie odpowiada."
+                        . "\n🔌 Aktywne łącza: $opis_aktywnych",
+                    'severity' => 'critical',
+                ];
+                $stan['alerted'] = true;
+            }
+        }
+
+        $state[$idx] = $stan;
+    }
+
+    return ['alerts' => $alerts, 'state' => $state];
+}
+
+/**
+ * Buduje treść raportu dobowego z danych już leżących w SQLite — bez odpytywania
+ * kontrolera, żeby raport dało się wysłać nawet gdy API akurat nie odpowiada.
+ *
+ * Wolumen transferu jest SZACUNKIEM: wan_stats trzyma próbki przepływności (bit/s),
+ * nie liczniki bajtów, więc mnożymy średnią przez długość okna. Stąd "~" w treści.
+ */
+function build_daily_report(PDO $db): string
+{
+    $sekcje = [];
+    $sekcje[] = "Raport dobowy — " . date('Y-m-d H:i');
+
+    // ── Ruch WAN (wiersz zbiorczy wan_idx=0; instalacje sprzed migracji mają tylko 1)
+    $q = $db->query("SELECT AVG(rx_bytes) a_rx, AVG(tx_bytes) a_tx, MAX(rx_bytes) m_rx, MAX(tx_bytes) m_tx, COUNT(*) n
+                     FROM wan_stats WHERE wan_idx = 0 AND recorded_at >= datetime('now','-1 day')");
+    $ruch = $q ? $q->fetch(PDO::FETCH_ASSOC) : null;
+    if (empty($ruch['n'])) {
+        $q = $db->query("SELECT AVG(rx_bytes) a_rx, AVG(tx_bytes) a_tx, MAX(rx_bytes) m_rx, MAX(tx_bytes) m_tx, COUNT(*) n
+                         FROM wan_stats WHERE wan_idx = 1 AND recorded_at >= datetime('now','-1 day')");
+        $ruch = $q ? $q->fetch(PDO::FETCH_ASSOC) : null;
+    }
+    if (!empty($ruch['n'])) {
+        $wol_rx = (float)$ruch['a_rx'] * 86400 / 8;
+        $wol_tx = (float)$ruch['a_tx'] * 86400 / 8;
+        $sekcje[] = "\n📶 Ruch WAN (24h)"
+            . "\n  Średnio: " . format_bps((float)$ruch['a_rx']) . " ↓ / " . format_bps((float)$ruch['a_tx']) . " ↑"
+            . "\n  Szczyt:  " . format_bps((float)$ruch['m_rx']) . " ↓ / " . format_bps((float)$ruch['m_tx']) . " ↑"
+            . "\n  Wolumen: ~" . format_bytes($wol_rx) . " ↓ / ~" . format_bytes($wol_tx) . " ↑";
+    }
+
+    // ── Dostępność łączy
+    $q = $db->query("SELECT wan_idx, AVG(up) * 100 pct, COUNT(*) n FROM wan_stats
+                     WHERE wan_idx > 0 AND recorded_at >= datetime('now','-1 day')
+                     GROUP BY wan_idx ORDER BY wan_idx");
+    $lacza = $q ? $q->fetchAll(PDO::FETCH_ASSOC) : [];
+    if ($lacza) {
+        $linie = [];
+        foreach ($lacza as $l) {
+            $linie[] = "  WAN{$l['wan_idx']}: " . number_format((float)$l['pct'], 1) . '%';
+        }
+        $sekcje[] = "\n🔌 Dostępność łączy (24h)\n" . implode("\n", $linie);
+    }
+
+    // ── Zdarzenia
+    $q = $db->query("SELECT severity, COUNT(*) c FROM events
+                     WHERE created_at >= datetime('now','-1 day') GROUP BY severity");
+    $zdarzenia = $q ? $q->fetchAll(PDO::FETCH_ASSOC) : [];
+    if ($zdarzenia) {
+        $czesci = [];
+        foreach ($zdarzenia as $z) {
+            $czesci[] = strtoupper($z['severity'] ?: 'INFO') . ': ' . $z['c'];
+        }
+        $sekcje[] = "\n🔔 Zdarzenia (24h)\n  " . implode(' | ', $czesci);
+    }
+
+    // ── Nowe urządzenia (known_macs.json prowadzi trigger nowego urządzenia)
+    $plik_macs = __DIR__ . '/data/known_macs.json';
+    if (file_exists($plik_macs)) {
+        $macs = json_decode(file_get_contents($plik_macs), true);
+        // Telefony z losowym MAC-iem potrafią wejść kilka razy pod tą samą nazwą —
+        // lista "Nazwa, Nazwa, Nazwa" wygląda na błąd, więc zliczamy powtórzenia.
+        $nowe = [];
+        if (is_array($macs)) {
+            foreach ($macs as $mac => $dane) {
+                if (!is_array($dane) || empty($dane['first_seen'])) continue;
+                if (strtotime($dane['first_seen']) >= time() - 86400) {
+                    $nazwa_urz = report_safe_name((string)($dane['name'] ?? $mac));
+                    $nowe[$nazwa_urz] = ($nowe[$nazwa_urz] ?? 0) + 1;
+                }
+            }
+        }
+        if ($nowe) {
+            arsort($nowe);
+            $etykiety = [];
+            foreach (array_slice($nowe, 0, 5, true) as $nazwa_urz => $ile) {
+                $etykiety[] = $nazwa_urz . ($ile > 1 ? " ×$ile" : '');
+            }
+            $sekcje[] = "\n🆕 Nowe urządzenia (24h): " . array_sum($nowe)
+                . "\n  " . implode(', ', $etykiety);
+        }
+    }
+
+    // ── Transfer urządzeń monitorowanych.
+    // client_history zapisuje wyłącznie urządzenia z listy monitorowanych, więc to NIE
+    // jest ranking całej sieci — nazwa sekcji musi to mówić wprost.
+    $q = $db->query("SELECT mac, MAX(rx_bytes) - MIN(rx_bytes) drx, MAX(tx_bytes) - MIN(tx_bytes) dtx
+                     FROM client_history WHERE seen_at >= datetime('now','-1 day')
+                     GROUP BY mac ORDER BY (drx + dtx) DESC LIMIT 3");
+    $top = $q ? $q->fetchAll(PDO::FETCH_ASSOC) : [];
+    // client_history trzyma MAC znormalizowany, loadDevices() klucze w formacie z pliku —
+    // bez normalizacji obu stron nazwy nigdy się nie trafiają.
+    $nazwy = [];
+    foreach ((function_exists('loadDevices') ? loadDevices() : []) as $mac => $dev) {
+        $nazwy[normalize_mac($mac)] = $dev['name'] ?? '';
+    }
+    $linie = [];
+    foreach ($top as $i => $t) {
+        $suma = (float)$t['drx'] + (float)$t['dtx'];
+        if ($suma <= 0) continue;
+        $nazwa = $nazwy[normalize_mac($t['mac'])] ?: $t['mac'];
+        $linie[] = '  ' . ($i + 1) . '. ' . report_safe_name($nazwa) . ' — ~' . format_bytes($suma);
+    }
+    if ($linie) {
+        $sekcje[] = "\n📊 Transfer urządzeń monitorowanych (24h)\n" . implode("\n", $linie);
+    }
+
+    return implode("\n", $sekcje);
+}
+
+/**
+ * Telegram wysyła powiadomienia z parse_mode=Markdown — pojedynczy `_` albo `*`
+ * w nazwie urządzenia wywraca parsowanie i cała wiadomość wraca z HTTP 400.
+ */
+function report_safe_name(string $nazwa): string
+{
+    return trim(preg_replace('/[*_`\[\]]/u', '', $nazwa));
+}
+
 function detect_known_devices(array $clients, array $devices): array
 {
     $status = [];
@@ -3383,6 +3640,49 @@ function render_nav($title = "MiniDash", $stats = []) {
                                         <div class="flex items-center gap-4">
                                             <input type="range" name="latency_threshold_ms" min="10" max="500" step="5" value="<?= htmlspecialchars($config['triggers']['latency_threshold_ms'] ?? 100) ?>" class="flex-grow accent-amber-500" oninput="this.nextElementSibling.value = this.value + ' ms'">
                                             <output class="text-xs font-mono text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 min-w-[80px] text-center"><?= htmlspecialchars($config['triggers']['latency_threshold_ms'] ?? 100) ?> ms</output>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Trigger: WAN / Failover -->
+                            <div class="p-6 bg-slate-900/40 rounded-3xl border border-white/5 space-y-6">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-4">
+                                        <div class="p-3 bg-orange-500/10 text-orange-500 rounded-2xl"><i data-lucide="globe" class="w-6 h-6"></i></div>
+                                        <div>
+                                            <p class="text-sm font-bold text-slate-200"><?= __('triggers.wan_alert') ?></p>
+                                            <p class="text-[12px] text-slate-500 uppercase tracking-widest"><?= __('triggers.wan_alert_desc') ?></p>
+                                        </div>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" name="wan_alert_enabled" class="sr-only peer" <?= ($config['triggers']['wan_alert_enabled'] ?? false) ? 'checked' : '' ?>>
+                                        <div class="w-11 h-6 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600 after:border-none"></div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Trigger: Raport dobowy -->
+                            <div class="p-6 bg-slate-900/40 rounded-3xl border border-white/5 space-y-6">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-4">
+                                        <div class="p-3 bg-teal-500/10 text-teal-400 rounded-2xl"><i data-lucide="file-text" class="w-6 h-6"></i></div>
+                                        <div>
+                                            <p class="text-sm font-bold text-slate-200"><?= __('triggers.daily_report') ?></p>
+                                            <p class="text-[12px] text-slate-500 uppercase tracking-widest"><?= __('triggers.daily_report_desc') ?></p>
+                                        </div>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" name="daily_report_enabled" class="sr-only peer" <?= ($config['triggers']['daily_report_enabled'] ?? false) ? 'checked' : '' ?>>
+                                        <div class="w-11 h-6 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600 after:border-none"></div>
+                                    </label>
+                                </div>
+                                <div class="flex items-center gap-6 pl-12">
+                                    <div class="w-full">
+                                        <label class="block text-[12px] font-black text-slate-500 uppercase tracking-widest mb-3"><?= __('triggers.daily_report_hour') ?></label>
+                                        <div class="flex items-center gap-4">
+                                            <input type="range" name="daily_report_hour" min="0" max="23" step="1" value="<?= htmlspecialchars($config['triggers']['daily_report_hour'] ?? 8) ?>" class="flex-grow accent-teal-500" oninput="this.nextElementSibling.value = String(this.value).padStart(2,'0') + ':00'">
+                                            <output class="text-xs font-mono text-teal-400 bg-teal-500/10 px-3 py-2 rounded-lg border border-teal-500/20 min-w-[80px] text-center"><?= str_pad((string)($config['triggers']['daily_report_hour'] ?? 8), 2, '0', STR_PAD_LEFT) ?>:00</output>
                                         </div>
                                     </div>
                                 </div>

@@ -109,6 +109,8 @@
         "wan_link": "Łącze WAN",
         "vlan_segmentation": "Segmentacja VLAN",
         "auto_subnet_detection": "Automatyczna detekcja podsieci w czasie rzeczywistym.",
+        "top_talkers": "Najwięksi konsumenci",
+        "top_talkers_desc": "Transfer od czasu połączenia klienta",
         "sum_in": "SUMA IN",
         "sum_out": "SUMA OUT",
         "refresh_data": "Odśwież dane",
@@ -557,7 +559,12 @@
         "vpn_alert_desc": "Alert o połączeniu/rozłączeniu VPN",
         "offline_grace": "Tolerancja Offline (anti-flapping)",
         "offline_grace_desc": "Ignoruj krótkie zniknięcia z sieci (roaming, uśpienie WiFi) przed alertem OFFLINE",
-        "offline_grace_label": "Próg karencji (s) — 0 = wyłączone"
+        "offline_grace_label": "Próg karencji (s) — 0 = wyłączone",
+        "wan_alert": "Alert Łącza WAN",
+        "wan_alert_desc": "Alert gdy łącze WAN padnie lub wróci (failover)",
+        "daily_report": "Raport Dobowy",
+        "daily_report_desc": "Podsumowanie ruchu, dostępności i zdarzeń raz na dobę",
+        "daily_report_hour": "Godzina wysyłki"
     },
     "clients_modal": {
         "search_placeholder": "Szukaj...",

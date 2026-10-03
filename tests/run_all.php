@@ -119,6 +119,97 @@ if (count($missing) > 0) {
 t_assert('EN covers all PL keys', 0, count($missing), $total_pass, $total_fail);
 
 // ═══════════════════════════════════════
+echo "\n=== WanLinksTest ===\n";
+
+$gw_dual = [
+    'mac' => 'a8:9c:6c:8c:5a:08', 'type' => 'udm',
+    'wan1' => ['up' => true,  'enable' => true, 'ip' => '31.179.138.206', 'ifname' => 'eth4', 'rx_bytes-r' => 100, 'tx_bytes-r' => 50],
+    'wan2' => ['up' => false, 'enable' => true, 'ip' => '192.168.10.100', 'ifname' => 'eth6', 'rx_bytes-r' => 0,   'tx_bytes-r' => 0],
+];
+$links = get_wan_links($gw_dual);
+t_assert('dual: oba lacza na liscie', 2, count($links), $total_pass, $total_fail);
+t_assert('dual: WAN2 mimo up=false', 'WAN2', $links[1]['name'], $total_pass, $total_fail);
+t_assert('dual: WAN2 status OFFLINE', 'OFFLINE', $links[1]['status'], $total_pass, $total_fail);
+t_assert('dual: rx w bitach/s', 800.0, $links[0]['rx'], $total_pass, $total_fail);
+t_assert('dual: tx w bitach/s', 400.0, $links[0]['tx'], $total_pass, $total_fail);
+t_assert('dual: idx wan2', 2, $links[1]['idx'], $total_pass, $total_fail);
+
+// Port bez konfiguracji nie moze udawac lacza w awarii
+$gw_stub = [
+    'wan1' => ['up' => true, 'ip' => '1.2.3.4', 'ifname' => 'eth4', 'rx_bytes-r' => 0, 'tx_bytes-r' => 0],
+    'wan2' => ['up' => false, 'enable' => false, 'ip' => '', 'ifname' => ''],
+];
+t_assert('stub wan2 pominiety', 1, count(get_wan_links($gw_stub)), $total_pass, $total_fail);
+
+// Brama bez kluczy wanN — agregat ze stat/gw
+$gw_agg = ['type' => 'ugw', 'ip' => '10.0.0.1', 'stat' => ['gw' => ['wan_rx_bytes-r' => 10, 'wan_tx_bytes-r' => 5]]];
+$agg = get_wan_links($gw_agg);
+t_assert('agregat: jedno lacze', 1, count($agg), $total_pass, $total_fail);
+t_assert('agregat: nazwa', 'WAN (Auto)', $agg[0]['name'], $total_pass, $total_fail);
+t_assert('agregat: rx*8', 80.0, $agg[0]['rx'], $total_pass, $total_fail);
+
+t_assert('brak bramy = pusto', 0, count(get_wan_links(null)), $total_pass, $total_fail);
+t_assert('pusta brama = pusto', 0, count(get_wan_links([])), $total_pass, $total_fail);
+
+echo "\n-- find_trad_gateway --\n";
+$devs = [
+    ['mac' => 'aa', 'type' => 'usw'],
+    ['mac' => 'bb', 'type' => 'uap'],
+    ['mac' => 'cc', 'model' => 'UCG Fiber', 'wan1' => ['up' => true]],
+];
+$gw = find_trad_gateway($devs);
+t_assert('brama po kluczu wan1 (model spoza listy)', 'cc', $gw['mac'] ?? null, $total_pass, $total_fail);
+t_assert('brama po typie ugw', 'dd', find_trad_gateway([['mac' => 'dd', 'type' => 'ugw']])['mac'] ?? null, $total_pass, $total_fail);
+t_assert('brak bramy', null, find_trad_gateway([['mac' => 'aa', 'type' => 'usw']]), $total_pass, $total_fail);
+
+echo "\n-- evaluate_wan_transitions --\n";
+$up1   = ['idx' => 1, 'name' => 'WAN1', 'ip' => '1.1.1.1', 'up' => true];
+$down2 = ['idx' => 2, 'name' => 'WAN2', 'ip' => '2.2.2.2', 'up' => false];
+$up2   = ['idx' => 2, 'name' => 'WAN2', 'ip' => '2.2.2.2', 'up' => true];
+
+// Pierwszy przebieg zapamietuje stan, ale nie krzyczy o zastanej awarii
+$r = evaluate_wan_transitions([$up1, $down2], [], true);
+t_assert('pierwszy przebieg: bez alertu', 0, count($r['alerts']), $total_pass, $total_fail);
+t_assert('pierwszy przebieg: pending=1', 1, $r['state']['2']['pending'], $total_pass, $total_fail);
+
+// Jeden cykl w dole to za malo (anti-flapping)
+$r1 = evaluate_wan_transitions([$up1, $down2], ['2' => ['pending' => 0, 'alerted' => false, 'down_since' => 0]], false);
+t_assert('jeden cykl w dole: cisza', 0, count($r1['alerts']), $total_pass, $total_fail);
+
+// Drugi cykl → alert krytyczny
+$r2 = evaluate_wan_transitions([$up1, $down2], $r1['state'], false);
+t_assert('drugi cykl: jeden alert', 1, count($r2['alerts']), $total_pass, $total_fail);
+t_assert('drugi cykl: severity', 'critical', $r2['alerts'][0]['severity'], $total_pass, $total_fail);
+t_assert('drugi cykl: tytul', 'WAN2 padł', $r2['alerts'][0]['title'], $total_pass, $total_fail);
+t_assert('tresc wymienia dzialajace lacze', true, strpos($r2['alerts'][0]['body'], 'WAN1 (1.1.1.1)') !== false, $total_pass, $total_fail);
+
+// Trzeci cykl w dole nie powtarza alertu
+$r3 = evaluate_wan_transitions([$up1, $down2], $r2['state'], false);
+t_assert('trzeci cykl: bez powtorki', 0, count($r3['alerts']), $total_pass, $total_fail);
+
+// Powrot lacza → info
+$r4 = evaluate_wan_transitions([$up1, $up2], $r3['state'], false);
+t_assert('powrot: jeden alert', 1, count($r4['alerts']), $total_pass, $total_fail);
+t_assert('powrot: severity info', 'info', $r4['alerts'][0]['severity'], $total_pass, $total_fail);
+t_assert('powrot: tytul', 'WAN2 wrócił', $r4['alerts'][0]['title'], $total_pass, $total_fail);
+t_assert('powrot: stan wyczyszczony', false, $r4['state']['2']['alerted'], $total_pass, $total_fail);
+
+// Powrot bez wczesniejszego alertu nie generuje "wrocil"
+$r5 = evaluate_wan_transitions([$up1, $up2], $r1['state'], false);
+t_assert('powrot po jednym cyklu: cisza', 0, count($r5['alerts']), $total_pass, $total_fail);
+
+// Wszystkie lacza w dole — tresc mowi wprost, ze nie ma internetu
+$down1 = ['idx' => 1, 'name' => 'WAN1', 'ip' => '1.1.1.1', 'up' => false];
+$s = evaluate_wan_transitions([$down1, $down2], [], false)['state'];
+$rall = evaluate_wan_transitions([$down1, $down2], $s, false);
+t_assert('oba w dole: dwa alerty', 2, count($rall['alerts']), $total_pass, $total_fail);
+t_assert('oba w dole: brak internetu w tresci', true, strpos($rall['alerts'][0]['body'], 'BRAK') !== false, $total_pass, $total_fail);
+
+echo "\n-- report_safe_name --\n";
+t_assert('usuwa markdown', 'GalaxyS21', report_safe_name('Galaxy_S21'), $total_pass, $total_fail);
+t_assert('zostawia normalne', 'NAS Synology', report_safe_name('NAS Synology'), $total_pass, $total_fail);
+
+// ═══════════════════════════════════════
 echo "\n=== CryptoTest ===\n";
 $plain = 'my-secret-api-key-12345';
 $encrypted = encrypt_value($plain);

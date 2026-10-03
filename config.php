@@ -1,6 +1,6 @@
 <?php
 /** Created by Łukasz Misiura (c) 2025 | dev.lm-ads.com **/
-define('MINIDASH_VERSION', '2.3.3');
+define('MINIDASH_VERSION', '2.4.0');
 error_reporting(E_ALL & ~E_NOTICE);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
@@ -89,7 +89,10 @@ $config = [
         'latency_alert_enabled' => false,
         'latency_threshold_ms' => 100,
         'vpn_alert_enabled' => false,
-        'offline_grace_sec' => 60
+        'offline_grace_sec' => 60,
+        'wan_alert_enabled' => false,
+        'daily_report_enabled' => false,
+        'daily_report_hour' => 8
     ],
     'protect' => [
         'enabled' => null, // null = auto-detect

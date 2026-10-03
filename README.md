@@ -13,6 +13,8 @@ Built with PHP 8.x, SQLite, Tailwind CSS and vanilla JavaScript. No frameworks, 
 
 ### Dashboard
 - Real-time WAN throughput (upload/download) with live chart
+- Dual-WAN support: per-link status, IP and throughput, including standby links that are down
+- Top talkers — clients ranked by traffic since they connected
 - Active clients count, WiFi networks, UniFi devices overview
 - VLAN segmentation with per-network traffic stats
 - Network latency (ping) monitoring to custom hosts
@@ -46,7 +48,8 @@ Built with PHP 8.x, SQLite, Tailwind CSS and vanilla JavaScript. No frameworks, 
 
 ### Notifications & Alerts
 - 8 channels: Telegram, Discord, Slack, Email (SMTP), ntfy, WhatsApp, SMS, n8n
-- Intelligent triggers: new device, IPS blocked, high latency, VPN connect/disconnect, speed spike
+- Intelligent triggers: new device, IPS blocked, high latency, VPN connect/disconnect, speed spike, WAN link down/up (failover)
+- Daily report: traffic, per-link availability, events and new devices, sent at a configurable hour
 - In-app notification bell with event history
 
 ### Settings

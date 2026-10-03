@@ -62,6 +62,9 @@ try {
                 $c['signal'] = $tc['signal'] ?? $tc['rssi'] ?? 0;
                 $c['is_wired'] = $c['is_wired'] ?? ($tc['is_wired'] ?? ($tc['type'] == 'wired' || empty($tc['essid'])));
                 $c['vlan'] = $c['vlan'] ?? $tc['vlan'] ?? 0;
+                // Integration API nie podaje uptime — bez tego czas sesji przy kliencie
+                // zawsze wynosil 0s, a liczniki rx/tx sa liczone wlasnie od jej poczatku.
+                $c['uptime'] = $tc['uptime'] ?? $c['uptime'] ?? 0;
             }
         }
         // Bez tego $c dalej wskazuje na OSTATNI element $clients. Kazda pozniejsza petla
@@ -130,36 +133,31 @@ try {
             $ram = $trad['system-stats']['mem'] ?? $d['ram'] ?? 0;
             $latency = $trad['stat']['gw']['latency'] ?? $trad['latency'] ?? 0;
 
-            // WAN Processing
-            $wan_keys = ['wan1', 'wan2'];
-            foreach ($wan_keys as $wk) {
-                if (!empty($trad[$wk]) && ($trad[$wk]['up'] ?? false)) {
-                    $rx = (float)($trad[$wk]['rx_bytes-r'] ?? 0) * 8;
-                    $tx = (float)($trad[$wk]['tx_bytes-r'] ?? 0) * 8;
-                    $wan_rx += $rx; $wan_tx += $tx;
-                    $wans[] = ['index' => (int)str_replace('wan', '', $wk), 'name' => strtoupper($wk), 'status' => 'ONLINE', 'ip' => $trad[$wk]['ip'] ?? 'N/A', 'rx' => $rx, 'tx' => $tx];
-                }
-            }
-            
-            // Backup for aggregate WAN stats
-            if (empty($wans)) {
-                $rx = (float)($trad['stat']['gw']['wan_rx_bytes-r'] ?? $trad['rx_bytes-r'] ?? 0) * 8;
-                $tx = (float)($trad['stat']['gw']['wan_tx_bytes-r'] ?? $trad['tx_bytes-r'] ?? 0) * 8;
-                if ($rx > 0 || $tx > 0) {
-                    $wan_rx = $rx; $wan_tx = $tx;
-                    $wans[] = ['index' => 1, 'name' => 'WAN (Auto)', 'status' => 'ONLINE', 'ip' => $trad['wan1']['ip'] ?? $d['ip'] ?? 'N/A', 'rx' => $rx, 'tx' => $tx];
-                }
+            // WAN Processing — get_wan_links() zwraca też łącza w dole (failover),
+            // dlatego licznik zbiorczy sumuje wyłącznie te aktywne.
+            foreach (get_wan_links($trad) as $l) {
+                if ($l['up']) { $wan_rx += $l['rx']; $wan_tx += $l['tx']; }
+                $wans[] = [
+                    'index'  => $l['idx'],
+                    'name'   => $l['name'],
+                    'status' => $l['status'],
+                    'up'     => $l['up'],
+                    'ip'     => $l['ip'],
+                    'rx'     => $l['rx'],
+                    'tx'     => $l['tx'],
+                ];
             }
         }
     }
 
+    // Status zbiorczy: ONLINE dopóki żyje choć jedno łącze. Sama obecność wpisu w $wans
+    // już nie wystarcza, bo lista zawiera teraz również łącza w dole.
     $wan_status = 'OFFLINE';
     $wan_ip = __('common.unknown_feminine');
-    if (!empty($wans)) {
+    foreach ($wans as $w) {
+        if (empty($w['up'])) continue;
         $wan_status = 'ONLINE';
-        foreach ($wans as $w) {
-            if ($w['ip'] && $w['ip'] !== 'N/A') { $wan_ip = $w['ip']; break; }
-        }
+        if ($w['ip'] && $w['ip'] !== 'N/A') { $wan_ip = $w['ip']; break; }
     }
     
     // Cache navbar stats and WAN details in session for other pages
@@ -578,9 +576,11 @@ try {
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+        <!-- Ta sama siatka pięciu kolumn i ten sam odstęp co w rzędzie kafelków statystyk
+             u góry strony — dzięki temu krawędzie paneli trafiają w krawędzie kafelków. -->
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-12">
             <!-- WAN Status & Live Chart -->
-            <div class="lg:col-span-2 glass-card p-8 self-start">
+            <div class="lg:col-span-3 glass-card p-8 self-start">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
                     <div>
                         <div class="flex items-center gap-3 mb-1">
@@ -615,13 +615,38 @@ try {
                         </div>
                     </div>
                 </div>
+
+                <?php if (count($wans) > 1): ?>
+                <!-- Rozbicie na łącza — przy jednym WAN-ie nagłówek wyżej mówi to samo -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6" id="wan-links-strip">
+                    <?php foreach ($wans as $w):
+                        $lc = $w['up'] ? ($w['index'] === 1 ? 'blue' : 'emerald') : 'red';
+                    ?>
+                    <div class="flex items-center gap-4 p-4 bg-slate-900/40 rounded-2xl border border-white/5" data-wan-idx="<?= (int)$w['index'] ?>">
+                        <div class="w-2.5 h-2.5 rounded-full bg-<?= $lc ?>-500 <?= $w['up'] ? 'animate-pulse' : '' ?> shrink-0" data-wan-dot></div>
+                        <div class="min-w-0 flex-grow">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[12px] font-black uppercase tracking-widest text-<?= $lc ?>-400"><?= htmlspecialchars($w['name']) ?></span>
+                                <span class="text-[10px] font-black uppercase tracking-widest text-slate-600" data-wan-status><?= $w['status'] ?></span>
+                            </div>
+                            <div class="text-[12px] font-mono text-slate-400 truncate" data-wan-ip><?= htmlspecialchars($w['ip']) ?></div>
+                        </div>
+                        <div class="flex flex-col items-end text-[12px] font-mono shrink-0">
+                            <span class="text-emerald-400" data-wan-rx><?= formatBps($w['rx']) ?> ↓</span>
+                            <span class="text-amber-400" data-wan-tx><?= formatBps($w['tx']) ?> ↑</span>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+
                 <div class="h-[280px] w-full">
                     <canvas id="wanLiveChart"></canvas>
                 </div>
             </div>
 
             <!-- VLAN List -->
-            <div class="glass-card p-8 flex flex-col">
+            <div class="lg:col-span-2 glass-card p-8 flex flex-col">
                 <div class="flex items-center gap-3 mb-8">
                     <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
                          <i data-lucide="layers" class="w-5 h-5"></i>
@@ -661,7 +686,68 @@ try {
                     <?= __('dashboard.auto_subnet_detection') ?>
                 </div>
             </div>
+
+            <?php
+        // Top talkers — liczniki rx_bytes/tx_bytes ze stat/sta są skumulowane OD MOMENTU
+        // POŁĄCZENIA klienta, nie dobowe. Dlatego obok sumy pokazujemy czas sesji: bez tego
+        // serwer wiszący w sieci od tygodnia zawsze bije rekordzistę z ostatniej godziny.
+        $top_talkers = [];
+        foreach ($clients as $c) {
+            $suma = (float)($c['rx_bytes'] ?? 0) + (float)($c['tx_bytes'] ?? 0);
+            if ($suma <= 0) continue;
+            $top_talkers[] = [
+                'name'  => $c['name'] ?? $c['hostname'] ?? $c['macAddress'] ?? $c['mac'] ?? '?',
+                'ip'    => $c['ipAddress'] ?? $c['ip'] ?? '',
+                'rx'    => (float)($c['rx_bytes'] ?? 0),
+                'tx'    => (float)($c['tx_bytes'] ?? 0),
+                'total' => $suma,
+                'uptime' => (int)($c['uptime'] ?? 0),
+            ];
+        }
+        usort($top_talkers, fn($a, $b) => $b['total'] <=> $a['total']);
+        $top_talkers = array_slice($top_talkers, 0, 5);
+        $tt_max = $top_talkers ? max(1, $top_talkers[0]['total']) : 1;
+        ?>
         </div>
+
+        <?php if ($top_talkers): ?>
+        <!-- Siatka pięciu kolumn taka sama jak w rzędzie kafelków statystyk u góry strony,
+             więc col-span-3 daje dokładnie szerokość trzech kafelków (z ich odstępami). -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
+            <div class="glass-card p-6 sm:col-span-2 lg:col-span-3">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400">
+                        <i data-lucide="trending-up" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold tracking-tight"><?= __('dashboard.top_talkers') ?></h2>
+                        <p class="text-[11px] text-slate-500 font-bold uppercase tracking-widest"><?= __('dashboard.top_talkers_desc') ?></p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <?php foreach ($top_talkers as $i => $t): ?>
+                    <div>
+                        <div class="flex justify-between items-center gap-3 mb-1.5">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="text-[11px] font-black text-slate-600 shrink-0"><?= $i + 1 ?>.</span>
+                                <span class="text-[13px] font-black text-slate-200 truncate"><?= htmlspecialchars($t['name']) ?></span>
+                            </div>
+                            <span class="text-[13px] font-black text-white font-mono shrink-0"><?= format_bytes($t['total']) ?></span>
+                        </div>
+                        <div class="bg-slate-800/50 h-2 rounded-full overflow-hidden">
+                            <div class="h-full bg-gradient-to-r from-violet-600 to-fuchsia-400 rounded-full" style="width: <?= round($t['total'] / $tt_max * 100, 1) ?>%"></div>
+                        </div>
+                        <div class="flex items-center gap-4 mt-1.5 text-[11px] font-mono text-slate-600">
+                            <span class="text-emerald-400"><?= format_bytes($t['rx']) ?> ↓</span>
+                            <span class="text-amber-400"><?= format_bytes($t['tx']) ?> ↑</span>
+                            <span class="ml-auto uppercase tracking-tighter font-bold"><?= formatDuration($t['uptime']) ?></span>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
     </div>
 
@@ -1146,7 +1232,12 @@ try {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            legend: { display: false }
+                            // Włączana dopiero gdy dojdą linie per łącze — przy dwóch
+                            // seriach zbiorczych i tak nie ma czego rozróżniać.
+                            legend: {
+                                display: false,
+                                labels: { color: '#64748b', boxWidth: 10, boxHeight: 2, font: { size: 10 } }
+                            }
                         },
                         scales: {
                             x: {
@@ -1215,7 +1306,58 @@ try {
                     });
                     wanChart.data.datasets[0].data = last20.map(d => d.rx);
                     wanChart.data.datasets[1].data = last20.map(d => d.tx);
+
+                    // Linie per łącze — przy failoverze suma wygląda tak samo niezależnie
+                    // od tego, które łącze niesie ruch. Dopiero rozbicie to pokazuje.
+                    const wanIdxs = [...new Set(last20.flatMap(d => (d.wans || []).map(w => w.idx)))].sort();
+                    if (wanIdxs.length > 1) {
+                        const wanColors = { 1: '#60a5fa', 2: '#a78bfa', 3: '#f472b6', 4: '#2dd4bf' };
+                        wanIdxs.forEach(idx => {
+                            let ds = wanChart.data.datasets.find(d => d.wanIdx === idx);
+                            if (!ds) {
+                                ds = {
+                                    label: 'WAN' + idx + ' ↓',
+                                    wanIdx: idx,
+                                    data: [],
+                                    borderColor: wanColors[idx] || '#94a3b8',
+                                    borderWidth: 1.5,
+                                    borderDash: [4, 3],
+                                    fill: false,
+                                    tension: 0.4,
+                                    pointRadius: 0
+                                };
+                                wanChart.data.datasets.push(ds);
+                            }
+                            ds.data = last20.map(d => {
+                                const w = (d.wans || []).find(x => x.idx === idx);
+                                return w ? w.rx : null;
+                            });
+                        });
+                        wanChart.options.plugins.legend.display = true;
+                    }
                     wanChart.update('none');
+
+                    // Pasek łączy nad wykresem
+                    const lastSample = last20[last20.length - 1];
+                    if (lastSample && Array.isArray(lastSample.wans)) {
+                        lastSample.wans.forEach(w => {
+                            const row = document.querySelector(`#wan-links-strip [data-wan-idx="${w.idx}"]`);
+                            if (!row) return;
+                            const dot = row.querySelector('[data-wan-dot]');
+                            const st = row.querySelector('[data-wan-status]');
+                            const ip = row.querySelector('[data-wan-ip]');
+                            const rx = row.querySelector('[data-wan-rx]');
+                            const tx = row.querySelector('[data-wan-tx]');
+                            if (dot) {
+                                const color = w.up ? (w.idx === 1 ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500';
+                                dot.className = `w-2.5 h-2.5 rounded-full ${color} ${w.up ? 'animate-pulse' : ''} shrink-0`;
+                            }
+                            if (st) st.innerText = w.up ? 'ONLINE' : 'OFFLINE';
+                            if (ip) ip.innerText = w.ip || 'N/A';
+                            if (rx) rx.innerText = formatBps(w.rx) + ' ↓';
+                            if (tx) tx.innerText = formatBps(w.tx) + ' ↑';
+                        });
+                    }
 
                     if (last20.length > 0) {
                         const last = last20[last20.length - 1];
