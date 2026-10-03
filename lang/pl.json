@@ -779,6 +779,7 @@
         "w_wan_chart": "Łącze WAN - wykres",
         "w_vlan": "Segmentacja VLAN",
         "w_top_talkers": "Najwięksi konsumenci",
-        "w_access": "Kontrola dostępu"
+        "w_access": "Kontrola dostępu",
+        "w_access_bar": "Pasek przełączników (Kontrola dostępu)"
     }
 }

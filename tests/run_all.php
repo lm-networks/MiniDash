@@ -336,6 +336,7 @@ t_assert('zła wysokość = auto', 'auto', $dl['widgets']['clients']['h'], $tota
 t_assert('zły id odrzucony', false, isset($dl['widgets']['<script>']), $total_pass, $total_fail);
 t_assert('nowe kafelki na końcu, nieznane wyrzucone', ['vlan', 'clients', 'wan_1', 'wan_2'],
     dw_resolve_order(['clients', 'wan_1', 'vlan', 'wan_2'], ['vlan', 'gone', 'clients']), $total_pass, $total_fail);
+t_assert('wysokość mini', 'mini', dw_sanitize_layout(['order' => ['a'], 'widgets' => ['a' => ['w' => 1, 'h' => 'mini']]])['widgets']['a']['h'], $total_pass, $total_fail);
 t_assert('bez zapisu = domyślna', ['a', 'b'], dw_resolve_order(['a', 'b'], []), $total_pass, $total_fail);
 
 // ═══════════════════════════════════════

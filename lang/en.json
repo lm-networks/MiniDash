@@ -771,6 +771,7 @@
         "w_wan_chart": "WAN link - chart",
         "w_vlan": "VLAN segmentation",
         "w_top_talkers": "Top talkers",
-        "w_access": "Access control"
+        "w_access": "Access control",
+        "w_access_bar": "Quick toggles bar (Access control)"
     }
 }

@@ -304,6 +304,14 @@ try {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="assets/css/fonts.css">
     <link rel="stylesheet" href="dashboard.css">
+    <style>
+        /* Szybkie przełączniki Kontroli dostępu: zielony = obiekt włączony, czerwony = wyłączony. */
+        .acc-quick[data-on="1"] { background: rgba(16,185,129,.16); border-color: rgba(16,185,129,.55); color: #6ee7b7; }
+        .acc-quick[data-on="0"] { background: rgba(244,63,94,.12); border-color: rgba(244,63,94,.45); color: #fda4af; }
+        .acc-quick:hover { filter: brightness(1.2); }
+        .acc-quick[data-busy="1"] { opacity: .5; pointer-events: none; }
+        .acc-micro .acc-dot { background: currentColor; box-shadow: 0 0 10px currentColor; }
+    </style>
     <script src="assets/js/lucide.min.js"></script>
     <script src="assets/js/chart.min.js"></script>
 </head>
@@ -791,6 +799,31 @@ try {
                 </div>
             </div>
             <?php dw_end(); endif; ?>
+
+            <?php if ($access_objects): ?>
+            <!-- Szybkie przełączniki Kontroli dostępu: pasek na całą szerokość i mikro-kafelki.
+                 Domyślnie ukryte — włącza się je w edytorze dashboardu. Zielony = obiekt włączony. -->
+            <?php dw_start('access_bar', 5, 'auto', __('dash_edit.w_access_bar'), true); ?>
+            <div class="glass-card px-4 py-3 flex flex-wrap items-center gap-2">
+                <span class="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-slate-500 mr-1">
+                    <i data-lucide="shield-ban" class="w-4 h-4 text-rose-400"></i><?= __('access.title') ?>
+                </span>
+                <?php foreach ($access_objects as $ao): ?>
+                <button type="button" class="acc-quick acc-chip px-3 py-1.5 rounded-xl text-[12px] font-black border transition"
+                        data-acc-quick="<?= htmlspecialchars($ao['id']) ?>" data-on="<?= $ao['enabled'] ? '1' : '0' ?>"
+                        onclick="accessQuickToggle(this)" title="<?= htmlspecialchars($ao['what'] . ($ao['schedule'] !== '' ? ' · ' . $ao['schedule'] : '')) ?>"><?= htmlspecialchars($ao['name']) ?></button>
+                <?php endforeach; ?>
+            </div>
+            <?php dw_end(); ?>
+            <?php foreach ($access_objects as $ao): dw_start('acc_' . strtolower($ao['id']), 1, 'mini', $ao['name'], true); ?>
+            <div class="acc-quick acc-micro glass-card px-4 flex items-center justify-between gap-2 cursor-pointer select-none border transition"
+                 data-acc-quick="<?= htmlspecialchars($ao['id']) ?>" data-on="<?= $ao['enabled'] ? '1' : '0' ?>"
+                 onclick="accessQuickToggle(this)" title="<?= htmlspecialchars($ao['what'] . ($ao['schedule'] !== '' ? ' · ' . $ao['schedule'] : '')) ?>">
+                <span class="text-[13px] font-black truncate"><?= htmlspecialchars($ao['name']) ?></span>
+                <span class="acc-dot w-2.5 h-2.5 rounded-full shrink-0"></span>
+            </div>
+            <?php dw_end(); endforeach; ?>
+            <?php endif; ?>
 
         <?php dw_render(); ?>
     </div>
@@ -1454,7 +1487,39 @@ try {
             });
         }
 
-        // ─── Kontrola dostępu: przełącznik obiektu z Settings → Objects ─────────
+        // ─── Kontrola dostępu: przełączanie obiektu z Settings → Objects ────────
+        // Jeden obiekt może być na dashboardzie w trzech miejscach (duży kafelek, pasek,
+        // mikro-kafelek) — po zmianie odświeżamy wszystkie naraz.
+        function accessSync(id, obj, on) {
+            document.querySelectorAll('[data-acc-quick="' + id + '"]').forEach(el => el.dataset.on = on ? '1' : '0');
+            const row = document.querySelector('[data-access-id="' + id + '"]');
+            if (row) {
+                const sw = row.querySelector('.access-switch');
+                if (sw) {
+                    sw.setAttribute('aria-checked', on ? 'true' : 'false');
+                    sw.classList.toggle('bg-rose-500', on);
+                    sw.classList.toggle('bg-slate-700', !on);
+                    sw.firstElementChild.classList.toggle('translate-x-5', on);
+                }
+                const badge = row.querySelector('[data-access-badge]');
+                if (badge && obj) badge.classList.toggle('hidden', !obj.active);
+            }
+        }
+
+        async function accessSend(id, want) {
+            const res = await fetch('api_access_toggle.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode(csrf_token()) ?> },
+                body: JSON.stringify({ id, enabled: want })
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || ('HTTP ' + res.status));
+            const on = json.object ? json.object.enabled : want;
+            accessSync(id, json.object, on);
+            return on;
+        }
+
+        // Duży kafelek — z potwierdzeniem.
         window.toggleAccessObject = async function toggleAccessObject(btn) {
             const row = btn.closest('[data-access-id]');
             if (!row || btn.disabled) return;
@@ -1464,25 +1529,27 @@ try {
             btn.disabled = true;
             btn.style.opacity = '0.5';
             try {
-                const res = await fetch('api_access_toggle.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode(csrf_token()) ?> },
-                    body: JSON.stringify({ id: row.getAttribute('data-access-id'), enabled: want })
-                });
-                const json = await res.json();
-                if (!json.success) throw new Error(json.message || ('HTTP ' + res.status));
-                const on = json.object ? json.object.enabled : want;
-                btn.setAttribute('aria-checked', on ? 'true' : 'false');
-                btn.classList.toggle('bg-rose-500', on);
-                btn.classList.toggle('bg-slate-700', !on);
-                btn.firstElementChild.classList.toggle('translate-x-5', on);
-                const badge = row.querySelector('[data-access-badge]');
-                if (badge && json.object) badge.classList.toggle('hidden', !json.object.active);
+                await accessSend(row.getAttribute('data-access-id'), want);
             } catch (e) {
                 alert(<?= json_encode(__('access.toggle_error')) ?> + ' ' + e.message);
             } finally {
                 btn.disabled = false;
                 btn.style.opacity = '';
+            }
+        };
+
+        // Pasek i mikro-kafelki — „na szybko", bez potwierdzenia.
+        window.accessQuickToggle = async function accessQuickToggle(el) {
+            if (el.dataset.busy === '1' || document.body.classList.contains('dash-editing')) return;
+            const id = el.dataset.accQuick;
+            el.dataset.busy = '1';
+            try {
+                const on = await accessSend(id, el.dataset.on !== '1');
+                if (typeof showToast === 'function') showToast((on ? <?= json_encode(__('access.log_on')) ?> : <?= json_encode(__('access.log_off')) ?>) + ': ' + (el.innerText || '').trim(), on ? 'success' : 'info');
+            } catch (e) {
+                alert(<?= json_encode(__('access.toggle_error')) ?> + ' ' + e.message);
+            } finally {
+                el.dataset.busy = '0';
             }
         };
 

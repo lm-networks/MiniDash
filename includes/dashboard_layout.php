@@ -14,13 +14,15 @@ $GLOBALS['dw_current'] = null;
 const DW_LAYOUT_FILE = __DIR__ . '/../data/dashboard_layout.json';
 
 /**
- * @param int        $w szerokość domyślna w kolumnach (1–5)
- * @param int|string $h wysokość domyślna: 'auto' (naturalna) albo liczba „kafelków"
- *                      (1 kafelek = wysokość małego kafelka statystyk)
+ * @param int         $w      szerokość domyślna w kolumnach (1–5)
+ * @param int|string  $h      wysokość domyślna: 'auto' (naturalna), 'mini' (¼ kafelka)
+ *                            albo liczba „kafelków" (1 kafelek = wysokość małego kafelka statystyk)
+ * @param string|null $label  nazwa w edytorze (gdy nie ma jej w tłumaczeniach, np. obiekty z konsoli)
+ * @param bool        $hidden domyślnie ukryty — pokazuje się dopiero, gdy włączysz go w edytorze
  */
-function dw_start(string $id, int $w = 1, $h = 1): void
+function dw_start(string $id, int $w = 1, $h = 1, ?string $label = null, bool $hidden = false): void
 {
-    $GLOBALS['dw_current'] = ['id' => $id, 'w' => $w, 'h' => $h];
+    $GLOBALS['dw_current'] = ['id' => $id, 'w' => $w, 'h' => $h, 'label' => $label, 'hidden' => $hidden];
     ob_start();
 }
 
@@ -29,7 +31,7 @@ function dw_end(): void
     $cur = $GLOBALS['dw_current'];
     $html = ob_get_clean();
     if ($cur === null) return;
-    $GLOBALS['dw_widgets'][$cur['id']] = ['w' => $cur['w'], 'h' => $cur['h'], 'html' => $html];
+    $GLOBALS['dw_widgets'][$cur['id']] = ['w' => $cur['w'], 'h' => $cur['h'], 'label' => $cur['label'], 'hidden' => $cur['hidden'], 'html' => $html];
     $GLOBALS['dw_current'] = null;
 }
 
@@ -44,7 +46,7 @@ function dw_load_layout(): array
 /**
  * Normalizuje układ przysłany z przeglądarki. Czysta funkcja — testowalna.
  * Odrzuca śmieci zamiast ufać klientowi: id tylko [a-z0-9_], szerokość 1–5,
- * wysokość 'auto' albo 1–4.
+ * wysokość 'auto', 'mini' albo 1–4.
  */
 function dw_sanitize_layout($in): array
 {
@@ -59,7 +61,7 @@ function dw_sanitize_layout($in): array
         $h = $cfg['h'] ?? 'auto';
         $out['widgets'][$id] = [
             'w'      => max(1, min(5, $w)),
-            'h'      => ($h === 'auto' || !is_numeric($h)) ? 'auto' : max(1, min(4, (int)$h)),
+            'h'      => $h === 'mini' ? 'mini' : (($h === 'auto' || !is_numeric($h)) ? 'auto' : max(1, min(4, (int)$h))),
             'hidden' => !empty($cfg['hidden']),
         ];
     }
@@ -126,11 +128,11 @@ function dw_render(): void
         $cfg = $layout['widgets'][$id] ?? [];
         $w = (int)($cfg['w'] ?? $def['w']);
         $h = $cfg['h'] ?? $def['h'];
-        $hidden = !empty($cfg['hidden']);
+        $hidden = array_key_exists('hidden', $cfg) ? !empty($cfg['hidden']) : !empty($def['hidden']);
         $cls = 'dash-widget dw-w' . $w . ($h !== 'auto' ? ' dw-fixed' : '') . ($hidden ? ' dw-hidden' : '');
     ?>
         <div class="<?= $cls ?>" data-widget="<?= htmlspecialchars($id) ?>" data-w="<?= $w ?>" data-h="<?= htmlspecialchars((string)$h) ?>"
-             data-default-w="<?= (int)$def['w'] ?>" data-hidden="<?= $hidden ? '1' : '0' ?>" data-label="<?= htmlspecialchars(dw_label($id)) ?>">
+             data-default-w="<?= (int)$def['w'] ?>" data-hidden="<?= $hidden ? '1' : '0' ?>" data-label="<?= htmlspecialchars($def['label'] ?? dw_label($id)) ?>">
             <?= $def['html'] ?>
         </div>
     <?php endforeach; ?>
@@ -170,9 +172,13 @@ function dw_render(): void
             // Liczymy w rzędach siatki, nie w pikselach: kafelek „N" = N × rzędy jednego kafelka.
             // Inaczej zaokrąglenie do rzędu 8 px rozjeżdża krawędzie (2 kafelki ≠ 2 × 1 kafelek).
             const rows = px => Math.max(1, Math.ceil((px + gap) / (row + gap)));
-            const tileRows = rows(tile);
+            // Wielokrotność 4, żeby cztery mikro-kafelki (¼ kafelka) jeden nad drugim trafiały równo w jeden kafelek.
+            let tileRows = rows(tile);
+            tileRows += (4 - tileRows % 4) % 4;
             items.forEach(el => {
-                let n = el.dataset.h === 'auto' ? 0 : +el.dataset.h;
+                const h = el.dataset.h;
+                if (h === 'mini') { el.style.gridRowEnd = 'span ' + (tileRows / 4); return; }
+                let n = h === 'auto' ? 0 : +h;
                 if (oneCol && n === 1 && el.dataset.w === '1') n = 0;
                 el.style.gridRowEnd = 'span ' + (n ? n * tileRows : rows(natural(cardOf(el))));
             });
@@ -222,7 +228,7 @@ function dw_render_editor(): void
             const tools = el.querySelector(':scope > .dw-tools');
             if (tools) {
                 tools.querySelector('[data-v="w"]').innerText = w;
-                tools.querySelector('[data-v="h"]').innerText = h === 'auto' ? T.auto : h;
+                tools.querySelector('[data-v="h"]').innerText = h === 'auto' ? T.auto : (h === 'mini' ? '¼' : h);
                 tools.querySelector('[data-act="hide"]').innerText = el.dataset.hidden === '1' ? T.show : T.hide;
             }
         }
@@ -242,14 +248,16 @@ function dw_render_editor(): void
                 if (!b) return;
                 ev.stopPropagation();
                 const act = b.dataset.act;
-                let w = +el.dataset.w, h = el.dataset.h === 'auto' ? 0 : +el.dataset.h;
+                // Wysokości po kolei: auto → ¼ kafelka (mini) → 1 … 4 kafelki.
+                const HS = ['auto', 'mini', '1', '2', '3', '4'];
+                let w = +el.dataset.w, hi = Math.max(0, HS.indexOf(el.dataset.h));
                 if (act === 'w-') w = Math.max(1, w - 1);
                 if (act === 'w+') w = Math.min(5, w + 1);
-                if (act === 'h-') h = Math.max(0, h - 1);   // 0 = auto
-                if (act === 'h+') h = Math.min(4, h + 1);
+                if (act === 'h-') hi = Math.max(0, hi - 1);
+                if (act === 'h+') hi = Math.min(HS.length - 1, hi + 1);
                 if (act === 'hide') el.dataset.hidden = el.dataset.hidden === '1' ? '0' : '1';
                 el.dataset.w = w;
-                el.dataset.h = h === 0 ? 'auto' : String(h);
+                el.dataset.h = HS[hi];
                 applySize(el);
                 window.dispatchEvent(new Event('resize'));   // wykresy (Chart.js) dopasowują się do nowego rozmiaru
             });
