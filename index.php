@@ -815,11 +815,11 @@ try {
                 <?php endforeach; ?>
             </div>
             <?php dw_end(); ?>
-            <?php foreach ($access_objects as $ao): dw_start('acc_' . strtolower($ao['id']), 1, 'mini', $ao['name'], true); ?>
-            <div class="acc-quick acc-micro glass-card px-4 flex items-center justify-between gap-2 cursor-pointer select-none border transition"
+            <?php foreach ($access_objects as $ao): dw_start('acc_' . strtolower($ao['id']), 'half', 'mini', $ao['name'], true); ?>
+            <div class="acc-quick acc-micro glass-card px-3 flex items-center justify-between gap-2 cursor-pointer select-none border transition"
                  data-acc-quick="<?= htmlspecialchars($ao['id']) ?>" data-on="<?= $ao['enabled'] ? '1' : '0' ?>"
                  onclick="accessQuickToggle(this)" title="<?= htmlspecialchars($ao['what'] . ($ao['schedule'] !== '' ? ' · ' . $ao['schedule'] : '')) ?>">
-                <span class="text-[13px] font-black truncate"><?= htmlspecialchars($ao['name']) ?></span>
+                <span class="text-[12px] font-black leading-tight line-clamp-2 break-words min-w-0"><?= htmlspecialchars($ao['name']) ?></span>
                 <span class="acc-dot w-2.5 h-2.5 rounded-full shrink-0"></span>
             </div>
             <?php dw_end(); endforeach; ?>

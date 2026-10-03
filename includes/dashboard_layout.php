@@ -14,13 +14,13 @@ $GLOBALS['dw_current'] = null;
 const DW_LAYOUT_FILE = __DIR__ . '/../data/dashboard_layout.json';
 
 /**
- * @param int         $w      szerokość domyślna w kolumnach (1–5)
+ * @param int|string  $w      szerokość domyślna w kolumnach (1–5) albo 'half' (pół kolumny)
  * @param int|string  $h      wysokość domyślna: 'auto' (naturalna), 'mini' (¼ kafelka)
  *                            albo liczba „kafelków" (1 kafelek = wysokość małego kafelka statystyk)
  * @param string|null $label  nazwa w edytorze (gdy nie ma jej w tłumaczeniach, np. obiekty z konsoli)
  * @param bool        $hidden domyślnie ukryty — pokazuje się dopiero, gdy włączysz go w edytorze
  */
-function dw_start(string $id, int $w = 1, $h = 1, ?string $label = null, bool $hidden = false): void
+function dw_start(string $id, $w = 1, $h = 1, ?string $label = null, bool $hidden = false): void
 {
     $GLOBALS['dw_current'] = ['id' => $id, 'w' => $w, 'h' => $h, 'label' => $label, 'hidden' => $hidden];
     ob_start();
@@ -45,7 +45,7 @@ function dw_load_layout(): array
 
 /**
  * Normalizuje układ przysłany z przeglądarki. Czysta funkcja — testowalna.
- * Odrzuca śmieci zamiast ufać klientowi: id tylko [a-z0-9_], szerokość 1–5,
+ * Odrzuca śmieci zamiast ufać klientowi: id tylko [a-z0-9_], szerokość 1–5 albo 'half',
  * wysokość 'auto', 'mini' albo 1–4.
  */
 function dw_sanitize_layout($in): array
@@ -57,10 +57,10 @@ function dw_sanitize_layout($in): array
     }
     foreach ((array)($in['widgets'] ?? []) as $id => $cfg) {
         if (!is_string($id) || !preg_match('/^[a-z0-9_]{1,40}$/', $id) || !is_array($cfg)) continue;
-        $w = (int)($cfg['w'] ?? 1);
+        $w = $cfg['w'] ?? 1;
         $h = $cfg['h'] ?? 'auto';
         $out['widgets'][$id] = [
-            'w'      => max(1, min(5, $w)),
+            'w'      => $w === 'half' ? 'half' : max(1, min(5, (int)$w)),
             'h'      => $h === 'mini' ? 'mini' : (($h === 'auto' || !is_numeric($h)) ? 'auto' : max(1, min(4, (int)$h))),
             'hidden' => !empty($cfg['hidden']),
         ];
@@ -97,13 +97,16 @@ function dw_render(): void
         /* Masonry: rzędy po 8 px, każdy kafelek zajmuje tyle rzędów, ile ma wysokości
            (liczone w JS — dwLayout). Nic nie rozciąga się do sąsiada, a „dense" wpycha
            następne kafelki w wolne miejsce pod niższymi. */
-        .dash-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); grid-auto-rows: 8px; grid-auto-flow: row dense; margin-bottom: 3rem; }
-        @media (min-width: 640px)  { .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (min-width: 1024px) { .dash-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
-        .dash-widget { position: relative; min-width: 0; grid-row-end: span 12; }
+        /* Siatka w półkolumnach: na komputerze 10 ścieżek, zwykła kolumna = 2 ścieżki (szerokości jak przy 5
+           kolumnach co do piksela), a kafelek „½" = 1 ścieżka — dwa mieszczą się w miejscu jednego. */
+        .dash-grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 8px; grid-auto-flow: row dense; margin-bottom: 3rem; }
+        @media (min-width: 640px)  { .dash-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .dash-grid { grid-template-columns: repeat(10, minmax(0, 1fr)); } }
+        .dash-widget { position: relative; min-width: 0; grid-row-end: span 12; grid-column: span 2; }
+        .dash-widget.dw-whalf { grid-column: span 1; }
         .dash-widget > :not(.dw-tools) { height: 100%; }
-        @media (min-width: 640px)  { .dw-w2, .dw-w3, .dw-w4, .dw-w5 { grid-column: span 2; } }
-        @media (min-width: 1024px) { .dw-w3 { grid-column: span 3; } .dw-w4 { grid-column: span 4; } .dw-w5 { grid-column: span 5; } }
+        @media (min-width: 640px)  { .dash-widget.dw-w2, .dash-widget.dw-w3, .dash-widget.dw-w4, .dash-widget.dw-w5 { grid-column: span 4; } }
+        @media (min-width: 1024px) { .dash-widget.dw-w3 { grid-column: span 6; } .dash-widget.dw-w4 { grid-column: span 8; } .dash-widget.dw-w5 { grid-column: span 10; } }
         /* Stała wysokość (w kafelkach): zawartość przewija się w środku kafelka. */
         .dw-fixed > :not(.dw-tools) { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
         /* Bez widocznych pasków: poziomo nic nie przewijamy (poświata WAN1 wystaje poza kartę),
@@ -126,13 +129,14 @@ function dw_render(): void
     <?php foreach ($order as $id):
         $def = $widgets[$id];
         $cfg = $layout['widgets'][$id] ?? [];
-        $w = (int)($cfg['w'] ?? $def['w']);
+        $w = $cfg['w'] ?? $def['w'];
+        $w = $w === 'half' ? 'half' : (int)$w;
         $h = $cfg['h'] ?? $def['h'];
         $hidden = array_key_exists('hidden', $cfg) ? !empty($cfg['hidden']) : !empty($def['hidden']);
         $cls = 'dash-widget dw-w' . $w . ($h !== 'auto' ? ' dw-fixed' : '') . ($hidden ? ' dw-hidden' : '');
     ?>
         <div class="<?= $cls ?>" data-widget="<?= htmlspecialchars($id) ?>" data-w="<?= $w ?>" data-h="<?= htmlspecialchars((string)$h) ?>"
-             data-default-w="<?= (int)$def['w'] ?>" data-hidden="<?= $hidden ? '1' : '0' ?>" data-label="<?= htmlspecialchars($def['label'] ?? dw_label($id)) ?>">
+             data-default-w="<?= htmlspecialchars((string)$def['w']) ?>" data-hidden="<?= $hidden ? '1' : '0' ?>" data-label="<?= htmlspecialchars($def['label'] ?? dw_label($id)) ?>">
             <?= $def['html'] ?>
         </div>
     <?php endforeach; ?>
@@ -168,7 +172,7 @@ function dw_render(): void
             items.forEach(el => { if (el.dataset.h === '1' && el.dataset.w === '1') tile = Math.max(tile, natural(cardOf(el))); });
             tile = Math.min(260, Math.max(140, tile || 176));
             // Telefon (jedna kolumna): małe kafelki w naturalnej wysokości — równanie rzędów nie ma tu sensu.
-            const oneCol = cs.gridTemplateColumns.trim().split(/\s+/).length === 1;
+            const oneCol = cs.gridTemplateColumns.trim().split(/\s+/).length <= 2;
             // Liczymy w rzędach siatki, nie w pikselach: kafelek „N" = N × rzędy jednego kafelka.
             // Inaczej zaokrąglenie do rzędu 8 px rozjeżdża krawędzie (2 kafelki ≠ 2 × 1 kafelek).
             const rows = px => Math.max(1, Math.ceil((px + gap) / (row + gap)));
@@ -219,15 +223,15 @@ function dw_render_editor(): void
                     saved: <?= $t('saved') ?>, error: <?= $t('error') ?>, confirmReset: <?= $t('confirm_reset') ?> };
 
         function applySize(el) {
-            const w = +el.dataset.w, h = el.dataset.h;
-            el.className = el.className.replace(/\bdw-(w\d|fixed)\b/g, '').replace(/\s+/g, ' ').trim();
+            const w = el.dataset.w, h = el.dataset.h;
+            el.className = el.className.replace(/\bdw-(w\d|whalf|fixed)\b/g, '').replace(/\s+/g, ' ').trim();
             el.classList.add('dw-w' + w);
             if (h !== 'auto') el.classList.add('dw-fixed');
             el.classList.toggle('dw-hidden', el.dataset.hidden === '1');
             if (window.dwLayout) window.dwLayout();
             const tools = el.querySelector(':scope > .dw-tools');
             if (tools) {
-                tools.querySelector('[data-v="w"]').innerText = w;
+                tools.querySelector('[data-v="w"]').innerText = w === 'half' ? '½' : w;
                 tools.querySelector('[data-v="h"]').innerText = h === 'auto' ? T.auto : (h === 'mini' ? '¼' : h);
                 tools.querySelector('[data-act="hide"]').innerText = el.dataset.hidden === '1' ? T.show : T.hide;
             }
@@ -250,9 +254,12 @@ function dw_render_editor(): void
                 const act = b.dataset.act;
                 // Wysokości po kolei: auto → ¼ kafelka (mini) → 1 … 4 kafelki.
                 const HS = ['auto', 'mini', '1', '2', '3', '4'];
-                let w = +el.dataset.w, hi = Math.max(0, HS.indexOf(el.dataset.h));
-                if (act === 'w-') w = Math.max(1, w - 1);
-                if (act === 'w+') w = Math.min(5, w + 1);
+                // Szerokości po kolei: ½ kolumny → 1 … 5 kolumn.
+                const WS = ['half', '1', '2', '3', '4', '5'];
+                let wi = Math.max(0, WS.indexOf(el.dataset.w)), hi = Math.max(0, HS.indexOf(el.dataset.h));
+                if (act === 'w-') wi = Math.max(0, wi - 1);
+                if (act === 'w+') wi = Math.min(WS.length - 1, wi + 1);
+                const w = WS[wi];
                 if (act === 'h-') hi = Math.max(0, hi - 1);
                 if (act === 'h+') hi = Math.min(HS.length - 1, hi + 1);
                 if (act === 'hide') el.dataset.hidden = el.dataset.hidden === '1' ? '0' : '1';
@@ -295,7 +302,7 @@ function dw_render_editor(): void
             grid().querySelectorAll(':scope > .dash-widget').forEach(el => {
                 const id = el.dataset.widget;
                 order.push(id);
-                widgets[id] = { w: +el.dataset.w, h: el.dataset.h, hidden: el.dataset.hidden === '1' };
+                widgets[id] = { w: el.dataset.w === 'half' ? 'half' : +el.dataset.w, h: el.dataset.h, hidden: el.dataset.hidden === '1' };
             });
             return { order, widgets };
         }
