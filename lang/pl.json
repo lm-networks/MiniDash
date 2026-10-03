@@ -700,6 +700,16 @@
         "any": "dowolne",
         "region": "region",
         "apps": "aplikacji",
-        "app_categories": "kategorii aplikacji"
+        "app_categories": "kategorii aplikacji",
+        "matrix_title": "Macierz stref",
+        "matrix_desc": "Domyślne zachowanie ruchu między strefami i Twoje reguły. Kliknij komórkę, żeby zobaczyć reguły tej pary.",
+        "def_allow": "Allow All",
+        "def_return": "Allow Return",
+        "def_block": "Block All",
+        "show_empty": "Pokaż puste strefy",
+        "from_to": "Z ↓ · Do →",
+        "nets": "sieci",
+        "own": "własne",
+        "matrix_legend": "Znaczniki w komórce to Twoje reguły: ✓ zezwalające, ✕ blokujące, ○ wyłączone. Allow Return = ruch zablokowany, przechodzą tylko odpowiedzi na połączenia z drugiej strony. Przerywana ramka = ruch w obrębie tej samej strefy."
     }
 }

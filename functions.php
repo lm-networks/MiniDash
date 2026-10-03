@@ -1657,17 +1657,67 @@ function fw_side_label(array $s, array $maps): string
 }
 
 /**
+ * Macierz stref jak w konsoli: dla każdej pary (źródło → cel) domyślne zachowanie
+ * i podsumowanie własnych reguł.
+ *
+ * Domyślne zachowanie wyznacza reguła systemowa o NAJWYŻSZYM indeksie (ostatnia
+ * w kolejności, np. „Block All Traffic" z indeksem 2147483647). Jeśli przy blokadzie
+ * jest systemowe „Allow Return Traffic", konsola pokazuje to jako „Allow Return".
+ * Czysta funkcja — testowalna bez API.
+ *
+ * @return array [src_name][dst_name] => ['default' => 'ALLOW'|'RETURN'|'BLOCK'|null,
+ *               'allow' => int, 'block' => int, 'off' => int, 'hits' => int]
+ */
+function firewall_zone_matrix(array $policies, array $zones): array
+{
+    $cells = [];
+    $tail  = [];   // [src][dst] => [index, action] reguły systemowej o najwyższym indeksie
+    $ret   = [];
+    foreach ($zones as $s) foreach ($zones as $d) {
+        $cells[$s][$d] = ['default' => null, 'allow' => 0, 'block' => 0, 'off' => 0, 'hits' => 0];
+    }
+    foreach ($policies as $p) {
+        if (!is_array($p)) continue;
+        $s = $zones[$p['source']['zone_id'] ?? ''] ?? null;
+        $d = $zones[$p['destination']['zone_id'] ?? ''] ?? null;
+        if ($s === null || $d === null) continue;
+        $action = strtoupper((string)($p['action'] ?? ''));
+        $index  = (int)($p['index'] ?? 0);
+        if (!empty($p['predefined'])) {
+            if (!isset($tail[$s][$d]) || $index > $tail[$s][$d][0]) $tail[$s][$d] = [$index, $action];
+            if ($action === 'ALLOW' && trim((string)($p['name'] ?? '')) === 'Allow Return Traffic') $ret[$s][$d] = true;
+            continue;
+        }
+        $c = &$cells[$s][$d];
+        if (empty($p['enabled'])) $c['off']++;
+        elseif ($action === 'ALLOW') $c['allow']++;
+        else $c['block']++;
+        $c['hits'] += (int)($p['hits'] ?? 0);
+        unset($c);
+    }
+    foreach ($tail as $s => $row) foreach ($row as $d => [$idx, $action]) {
+        $cells[$s][$d]['default'] = $action === 'ALLOW' ? 'ALLOW' : (!empty($ret[$s][$d]) ? 'RETURN' : 'BLOCK');
+    }
+    return $cells;
+}
+
+/**
  * Reguły firewalla (zone-based, v2 API) w postaci do wyświetlenia. Kolejność jak
  * w konsoli: para stref, potem index.
  */
 function get_firewall_view(): array
 {
     $pols = fetch_api('/proxy/network/v2/api/site/default/firewall-policies');
-    if (isset($pols['error']) || !is_array($pols['data'] ?? null)) return ['zones' => [], 'rules' => [], 'error' => $pols['error'] ?? 'no data'];
+    if (isset($pols['error']) || !is_array($pols['data'] ?? null)) return ['zones' => [], 'rules' => [], 'matrix' => ['zones' => [], 'cells' => []], 'error' => $pols['error'] ?? 'no data'];
 
     $zones = [];
+    $zone_nets = [];
+    $zone_keys = [];
     foreach ((fetch_api('/proxy/network/v2/api/site/default/firewall/zone')['data'] ?? []) as $z) {
-        if (!empty($z['_id'])) $zones[$z['_id']] = $z['name'] ?? $z['_id'];
+        if (empty($z['_id'])) continue;
+        $zones[$z['_id']] = $z['name'] ?? $z['_id'];
+        $zone_nets[$z['_id']] = (array)($z['network_ids'] ?? []);
+        $zone_keys[$z['_id']] = (string)($z['zone_key'] ?? '');
     }
     $maps = ['networks' => [], 'groups' => [], 'clients' => []];
     foreach ((fetch_api('/proxy/network/api/s/default/rest/networkconf')['data'] ?? []) as $n) {
@@ -1708,7 +1758,17 @@ function get_firewall_view(): array
         ];
     }
     usort($rules, fn($a, $b) => [$a['src_zone'], $a['dst_zone'], $a['user'] ? 0 : 1, $a['index']] <=> [$b['src_zone'], $b['dst_zone'], $b['user'] ? 0 : 1, $b['index']]);
-    return ['zones' => array_values($zones), 'rules' => $rules, 'error' => null];
+
+    $matrix_zones = [];
+    foreach ($zones as $zid => $zname) {
+        $matrix_zones[] = ['name' => $zname, 'key' => $zone_keys[$zid] ?? '', 'networks' => array_map(fn($n) => $maps['networks'][$n] ?? $n, $zone_nets[$zid] ?? [])];
+    }
+    return [
+        'zones'  => array_values($zones),
+        'rules'  => $rules,
+        'matrix' => ['zones' => $matrix_zones, 'cells' => firewall_zone_matrix($pols['data'], $zones)],
+        'error'  => null,
+    ];
 }
 
 /**

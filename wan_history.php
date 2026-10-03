@@ -3,11 +3,14 @@
 require_once 'config.php';
 require_once 'db.php';
 require_once 'functions.php';
+require_once 'includes/navbar_stats.php';
 
 if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
     header('Location: login.php');
     exit;
 }
+
+$navbar_stats = get_navbar_stats();
 
 $days = (int)($_GET['days'] ?? 30);
 if (!in_array($days, [7, 30, 90], true)) $days = 30;
@@ -73,7 +76,7 @@ $wan_colors = [1 => 'blue', 2 => 'emerald', 3 => 'pink', 4 => 'teal'];
     <script src="assets/js/lucide.min.js"></script>
 </head>
 <body class="pt-24 pb-12 antialiased">
-    <?php render_nav(__('wan_history.title')); ?>
+    <?php render_nav(__('wan_history.title'), $navbar_stats); ?>
 
     <div class="max-w-6xl mx-auto px-6">
         <div class="flex flex-wrap items-center justify-between gap-4 mb-8">

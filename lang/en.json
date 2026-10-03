@@ -692,6 +692,16 @@
         "any": "any",
         "region": "region",
         "apps": "apps",
-        "app_categories": "app categories"
+        "app_categories": "app categories",
+        "matrix_title": "Zone matrix",
+        "matrix_desc": "Default behaviour between zones and your rules. Click a cell to see the rules for that pair.",
+        "def_allow": "Allow All",
+        "def_return": "Allow Return",
+        "def_block": "Block All",
+        "show_empty": "Show empty zones",
+        "from_to": "From ↓ · To →",
+        "nets": "networks",
+        "own": "own",
+        "matrix_legend": "Badges in a cell are your rules: ✓ allowing, ✕ blocking, ○ disabled. Allow Return = traffic blocked, only replies to connections from the other side pass. Dashed border = traffic within the same zone."
     }
 }
