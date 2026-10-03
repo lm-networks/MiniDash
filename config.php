@@ -146,6 +146,21 @@ function load_app_config($defaults) {
 
 $config = load_app_config($config);
 
+/**
+ * Strefa czasowa z ustawień (Dane osobiste → Region). „auto" = strefa konsoli UniFi,
+ * zapamiętana w data/console_timezone.txt (odświeża ją get_console_settings()).
+ * Bez poprawnej wartości zostaje domyślna z php.ini.
+ */
+function minidash_apply_timezone(array $config): void {
+    $tz = (string)($config['timezone'] ?? 'auto');
+    if ($tz === 'auto' || $tz === '') {
+        $f = __DIR__ . '/data/console_timezone.txt';
+        $tz = is_file($f) ? trim((string)@file_get_contents($f)) : '';
+    }
+    if ($tz !== '' && in_array($tz, timezone_identifiers_list(), true)) date_default_timezone_set($tz);
+}
+minidash_apply_timezone($config);
+
 // Load language: cookie > config > console > fallback pl
 $_active_lang = $_COOKIE['minidash_lang'] ?? $config['language'] ?? 'pl';
 if ($_active_lang === 'auto') {

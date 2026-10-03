@@ -13,6 +13,14 @@ require_once __DIR__ . '/functions.php';
 
 header('Content-Type: application/json');
 
+// Cron woła ten plik z CLI; z przeglądarki tylko po zalogowaniu (zwraca IP WAN i ruch).
+if (PHP_SAPI !== 'cli' && empty($_SESSION['logged_in'])) {
+    ob_end_clean();
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit;
+}
+
 $siteId = $config['site'];
 $file = __DIR__ . '/data/wan_stats.json';
 $history = [];

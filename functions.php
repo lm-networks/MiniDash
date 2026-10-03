@@ -70,7 +70,8 @@ function get_console_settings() {
     global $config;
     $site = $_SESSION['site_id'] ?? $config['site'] ?? 'default';
     $tradSite = get_trad_site_id($site);
-    $resp = fetch_api("/proxy/network/api/s/$tradSite/get/setting/system");
+    // Całe get/setting: strefa siedzi w kluczu „locale" (get/setting/system zwraca pustą listę).
+    $resp = fetch_api("/proxy/network/api/s/$tradSite/get/setting");
     $data = $resp['data'] ?? [];
     
     $settings = [
@@ -81,12 +82,18 @@ function get_console_settings() {
     ];
 
     foreach ($data as $item) {
-        if (($item['key'] ?? '') === 'system') {
-            $settings['timezone'] = $item['timezone'] ?? $settings['timezone'];
-            $settings['time_format'] = ($item['time_format'] ?? '') === 'HH:MM' ? '24h' : '12h';
-            // date_format is trickier as UniFi uses custom strings, simplified for now
-            break;
+        $key = $item['key'] ?? '';
+        if (in_array($key, ['locale', 'system'], true) && !empty($item['timezone'])) {
+            $settings['timezone'] = $item['timezone'];
         }
+        if ($key === 'system' && isset($item['time_format'])) {
+            $settings['time_format'] = $item['time_format'] === 'HH:MM' ? '24h' : '12h';
+        }
+    }
+    // Zapamiętujemy strefę konsoli dla ustawienia „auto" (stosuje ją config.php).
+    $tzf = __DIR__ . '/data/console_timezone.txt';
+    if ($data && (!is_file($tzf) || trim((string)@file_get_contents($tzf)) !== $settings['timezone'])) {
+        @file_put_contents($tzf, $settings['timezone']);
     }
     
     $console_settings = $settings;
@@ -4797,4 +4804,14 @@ $tradSite = get_trad_site_id($site_id_context);
 
     <?php
     // render_personal_modal() will be called by render_footer()
+}
+
+// Ustawienie „auto": strefa z konsoli UniFi, odświeżana najwyżej raz na dobę.
+if ((($config['timezone'] ?? 'auto') === 'auto') && PHP_SAPI !== 'cli') {
+    $tzf = __DIR__ . '/data/console_timezone.txt';
+    if (!is_file($tzf) || filemtime($tzf) < time() - 86400) {
+        @touch($tzf);  // nawet przy błędzie API nie pytamy przy każdym żądaniu
+        get_console_settings();
+        minidash_apply_timezone($config);
+    }
 }

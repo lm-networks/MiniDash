@@ -3,6 +3,14 @@
 require_once 'config.php';
 require_once 'db.php';
 require_once 'functions.php';
+require_once 'includes/navbar_stats.php';
+
+if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
+    header('Location: login.php');
+    exit;
+}
+
+$navbar_stats = get_navbar_stats();
 
 $title = __('history.history_timeline');
 $all_events = get_recent_events(100, false); // Pokaż wszystko, nawet "wyczyszczone"
@@ -20,7 +28,7 @@ $all_events = get_recent_events(100, false); // Pokaż wszystko, nawet "wyczyszc
     <script src="assets/js/lucide.min.js"></script>
 </head>
 <body class="pt-24 pb-12 antialiased">
-    <?php render_nav(__('history.title')); ?>
+    <?php render_nav(__('history.title'), $navbar_stats); ?>
     
     <div class="max-w-4xl mx-auto px-6">
         <div class="flex items-center justify-between mb-8">

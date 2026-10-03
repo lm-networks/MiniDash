@@ -505,7 +505,15 @@
         "alert_label": "Alert",
         "clear_confirm": "Are you sure you want to clear all notification history?",
         "clear_error": "Error: ",
-        "network_error": "Network error"
+        "network_error": "Network error",
+        "notifications_cleared": "Notifications cleared",
+        "clear_failed": "Failed to clear"
+    },
+    "personal": {
+        "profile_saved": "Profile updated",
+        "save_error": "Error",
+        "unexpected_error": "An unexpected error occurred while saving",
+        "saving": "Saving..."
     },
     "alerts": {
         "speed_spike_title": "Sudden traffic spike: ",

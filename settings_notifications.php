@@ -3,6 +3,14 @@
 require_once 'config.php';
 require_once 'db.php';
 require_once 'functions.php';
+require_once 'includes/navbar_stats.php';
+
+if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
+    header('Location: login.php');
+    exit;
+}
+
+$navbar_stats = get_navbar_stats();
 
 $status = "";
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -121,7 +129,7 @@ foreach ($notif_keys as $key => $defaults) {
     </style>
 </head>
 <body class="pt-24 pb-20 antialiased min-h-screen">
-    <?php render_nav(__('notifications.nav_title')); ?>
+    <?php render_nav(__('notifications.nav_title'), $navbar_stats); ?>
 
     <div class="max-w-5xl mx-auto px-6">
         <div class="flex items-center justify-between mb-10">

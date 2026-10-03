@@ -2,6 +2,14 @@
 /** Auto-detect UniFi Site ID — used by Setup Wizard */
 header('Content-Type: application/json');
 
+// Tylko dla kreatora instalacji - po instalacji endpoint jest zamknięty
+// (inaczej każdy mógłby kazać serwerowi łączyć się z dowolnym adresem).
+if (file_exists(__DIR__ . '/data/.installed')) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Setup already completed']);
+    exit;
+}
+
 $controller_url = trim($_POST['controller_url'] ?? '');
 $api_key = trim($_POST['api_key'] ?? '');
 
