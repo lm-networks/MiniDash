@@ -103,7 +103,10 @@ function dw_render(): void
         @media (min-width: 640px)  { .dw-w2, .dw-w3, .dw-w4, .dw-w5 { grid-column: span 2; } }
         @media (min-width: 1024px) { .dw-w3 { grid-column: span 3; } .dw-w4 { grid-column: span 4; } .dw-w5 { grid-column: span 5; } }
         /* Stała wysokość (w kafelkach): zawartość przewija się w środku kafelka. */
-        .dw-fixed > :not(.dw-tools) { position: absolute; inset: 0; overflow: auto; }
+        .dw-fixed > :not(.dw-tools) { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
+        /* Bez widocznych pasków: poziomo nic nie przewijamy (poświata WAN1 wystaje poza kartę),
+           a pionowo treść da się przewinąć kółkiem / palcem, gdy faktycznie się nie mieści. */
+        .dw-fixed > :not(.dw-tools)::-webkit-scrollbar { display: none; }
         .dw-hidden { display: none; }
         .dw-tools { display: none; }
         .dash-editing .dw-hidden { display: block; opacity: .35; }
