@@ -162,6 +162,16 @@ chown -R http:http /volume1/web/minidash/logs
    - Source: `https://yourdomain.com/minidash`
    - Destination: `http://localhost:80` (where Web Station serves the files)
 
+> **Security check (required after install).** MiniDash ships a root `.htaccess` that blocks
+> `.env` (UniFi API key, admin password), `.git/` and `data/.encryption_key`. Apache honours it only
+> with `AllowOverride All`. Verify from outside your network - every line must print `403`:
+>
+> ```bash
+> for p in .env .git/config data/.encryption_key data/config.json; do
+>   curl -s -o /dev/null -w "$p %{http_code}\n" https://unifi.yourdomain.com/$p
+> done
+> ```
+
 ### Step 5: Setup Wizard
 
 Navigate to your configured hostname or IP. The **Setup Wizard** will appear — fill in your configuration and you're ready to go.
@@ -227,6 +237,8 @@ server {
     location ~ /tests/ { deny all; }
     location ~ /docs/ { deny all; }
     location ~ /migrations/ { deny all; }
+    location ~ /includes/ { deny all; }
+    location ~ /docker/ { deny all; }
     location ~ /node_modules/ { deny all; }
     location ~ /\.git { deny all; }
 
@@ -314,6 +326,16 @@ Create `/etc/apache2/sites-available/minidash.conf`:
     </Directory>
 </VirtualHost>
 ```
+
+> **Security check (required after install).** MiniDash ships a root `.htaccess` that blocks
+> `.env` (UniFi API key, admin password), `.git/` and `data/.encryption_key`. Apache honours it only
+> with `AllowOverride All`. Verify from outside your network - every line must print `403`:
+>
+> ```bash
+> for p in .env .git/config data/.encryption_key data/config.json; do
+>   curl -s -o /dev/null -w "$p %{http_code}\n" https://unifi.yourdomain.com/$p
+> done
+> ```
 
 Enable and restart:
 
