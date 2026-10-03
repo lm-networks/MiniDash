@@ -311,12 +311,45 @@ try {
         .acc-quick:hover { filter: brightness(1.2); }
         .acc-quick[data-busy="1"] { opacity: .5; pointer-events: none; }
         .acc-micro .acc-dot { background: currentColor; box-shadow: 0 0 10px currentColor; }
+
+        /* Mapa sieci */
+        .nm-switch { display: flex; padding: 3px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); }
+        .nm-switch button { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 9px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; color: #64748b; transition: .15s; }
+        .nm-switch button.active { background: rgba(168,85,247,.15); color: #c084fc; }
+        .nm-internet { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 6px 12px; border-radius: 999px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .15em; color: #93c5fd; background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.25); }
+        .nm-tree { list-style: none; margin: 0; padding: 0; }
+        .nm-tree .nm-tree { margin-left: 22px; }
+        .nm-tree li { position: relative; padding: 6px 0 6px 28px; }
+        .nm-root > li { padding-left: 0; }
+        .nm-tree .nm-tree > li::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid rgba(148,163,184,.25); }
+        .nm-tree .nm-tree > li:last-child::before { bottom: auto; height: 31px; }
+        .nm-tree .nm-tree > li::after { content: ''; position: absolute; left: 0; top: 31px; width: 26px; border-top: 1px solid rgba(148,163,184,.25); }
+        .nm-port { position: absolute; left: 4px; top: 13px; z-index: 1; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; background: #0f172a; padding: 0 3px; line-height: 14px; border-radius: 4px; transform: translateX(-30%); white-space: nowrap; }
+        .nm-node { display: flex; align-items: center; gap: 12px; max-width: 460px; padding: 10px 12px; border-radius: 14px; background: rgba(15,23,42,.7); border: 1px solid rgba(255,255,255,.08); }
+        .nm-node.nm-um { border-style: dashed; border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.05); }
+        .nm-ico { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 10px; background: rgba(168,85,247,.12); color: #c084fc; }
+        .nm-um .nm-ico { background: rgba(251,191,36,.12); color: #fbbf24; }
+        .nm-name { display: block; font-size: 14px; font-weight: 900; color: #fff; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .nm-sub { display: block; font-size: 11px; font-family: ui-monospace, monospace; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .nm-dot { width: 10px; height: 10px; border-radius: 999px; flex-shrink: 0; background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,.6); }
+        .nm-off .nm-dot { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,.6); }
+        .nm-off { opacity: .7; }
+        .nm-cnt { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 8px; font-size: 11px; font-weight: 900; color: #c084fc; background: rgba(168,85,247,.1); border: 1px solid rgba(168,85,247,.2); flex-shrink: 0; }
+        .nm-cnt:hover { background: rgba(168,85,247,.2); }
+        .nm-clients { display: none; flex-wrap: wrap; gap: 6px; max-width: 640px; margin: 8px 0 2px 0; }
+        li.nm-open > .nm-clients { display: flex; }
+        .nm-client { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px; font-size: 11px; color: #cbd5e1; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); }
+        .nm-client b { font-weight: 800; color: #e2e8f0; }
+        .nm-client em { font-style: normal; font-family: ui-monospace, monospace; color: #64748b; }
+        .nm-node { min-width: 0; }
+        @media (max-width: 639px) { .nm-tree .nm-tree { margin-left: 6px; } .nm-tree .nm-tree > li { padding-left: 22px; } .nm-tree .nm-tree > li::after { width: 20px; } .nm-port { font-size: 8px; } }
     </style>
     <script src="assets/js/lucide.min.js"></script>
     <script src="assets/js/chart.min.js"></script>
 </head>
 <body class="custom-scrollbar">
-    <?php require_once __DIR__ . '/includes/dashboard_layout.php'; ?>
+    <?php require_once __DIR__ . '/includes/dashboard_layout.php';
+require_once __DIR__ . '/includes/network_map.php'; ?>
     <?php render_nav("MiniDash", [
         'cpu' => $cpu,
         'ram' => $ram,
@@ -1124,8 +1157,8 @@ try {
     <!-- Modal: UniFi Infrastructure Devices -->
     <div id="infrModal" class="modal-overlay" onclick="closeInfrModal(event)">
         <div class="modal-container max-w-5xl p-0 overflow-hidden" onclick="event.stopPropagation()">
-            <div class="p-6 border-b border-white/10 flex justify-between items-center">
-                <div class="flex items-center gap-4">
+            <div class="p-6 border-b border-white/10 flex justify-between items-center gap-3">
+                <div class="flex items-center gap-4 min-w-0">
                     <div class="p-3 bg-purple-500/10 rounded-xl text-purple-400">
                         <i data-lucide="server" class="w-6 h-6"></i>
                     </div>
@@ -1134,12 +1167,23 @@ try {
                         <p class="text-[12px] text-slate-500 uppercase tracking-widest font-bold font-mono">Infrastructure Overview</p>
                     </div>
                 </div>
+                <div class="flex items-center gap-3">
+                <div class="nm-switch" role="tablist">
+                    <button type="button" data-infr-view="list" onclick="setInfrView('list')"><i data-lucide="list" class="w-3.5 h-3.5"></i><span class="hidden sm:inline"><?= __('netmap.view_list') ?></span></button>
+                    <button type="button" data-infr-view="map" onclick="setInfrView('map')"><i data-lucide="git-fork" class="w-3.5 h-3.5"></i><span class="hidden sm:inline"><?= __('netmap.view_map') ?></span></button>
+                </div>
                 <button onclick="closeInfrModal()" class="p-2 text-slate-500 hover:text-white transition bg-white/5 rounded-xl border border-white/5">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
+                </div>
             </div>
             <div class="max-h-[70vh] overflow-y-auto p-6 custom-scrollbar">
-                <div class="space-y-12">
+                <!-- Mapa sieci: topologia z uplinków i LLDP (switche niezarządzane wykrywane automatycznie) -->
+                <div id="infr-map" class="hidden">
+                    <?php render_network_tree(build_network_tree($trad_devices, $trad_clients ?? [])); ?>
+                    <p class="mt-6 text-[11px] text-slate-500 flex items-center gap-2"><i data-lucide="info" class="w-3.5 h-3.5 shrink-0"></i><?= __('netmap.unmanaged_hint') ?></p>
+                </div>
+                <div id="infr-list" class="space-y-12">
                     <?php
                     // 0. Build Map for Uplink Names
                     $dev_mac_to_name = [];
@@ -2028,6 +2072,19 @@ try {
                 console.error('infrModal not found!');
             }
         }
+
+        function setInfrView(v) {
+            v = v === 'map' ? 'map' : 'list';
+            document.getElementById('infr-map')?.classList.toggle('hidden', v !== 'map');
+            document.getElementById('infr-list')?.classList.toggle('hidden', v !== 'list');
+            document.querySelectorAll('[data-infr-view]').forEach(b => b.classList.toggle('active', b.dataset.infrView === v));
+            try { localStorage.setItem('md_infr_view', v); } catch (e) {}
+        }
+        (function () {
+            let v = 'list';
+            try { v = localStorage.getItem('md_infr_view') || 'list'; } catch (e) {}
+            setInfrView(v);
+        })();
 
         function closeInfrModal(e) {
             if (e && e.target !== e.currentTarget) return;

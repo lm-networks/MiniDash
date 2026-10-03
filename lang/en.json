@@ -773,5 +773,14 @@
         "w_top_talkers": "Top talkers",
         "w_access": "Access control",
         "w_access_bar": "Quick toggles bar (Access control)"
+    },
+    "netmap": {
+        "view_list": "List",
+        "view_map": "Map",
+        "port": "port",
+        "clients": "Clients",
+        "unmanaged": "Unmanaged switch",
+        "unmanaged_hint": "Dashed frame = unmanaged switch invisible to UniFi. Detected from LLDP: several devices seen on one port. The name comes from the UniFi port name.",
+        "empty": "No device data."
     }
 }

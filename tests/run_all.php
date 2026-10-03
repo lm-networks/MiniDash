@@ -323,6 +323,39 @@ t_assert('UA: Android Chrome', ['Android', 'Chrome'], sg_parse_ua('Mozilla/5.0 (
 t_assert('UA: Windows Edge', ['Windows', 'Edge'], sg_parse_ua('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/129.0 Safari/537.36 Edg/129.0'), $total_pass, $total_fail);
 
 // ═══════════════════════════════════════
+echo "\n=== NetworkMapTest ===\n";
+require_once dirname(__DIR__) . '/includes/network_map.php';
+// Odwzorowanie realnej sieci: brama port 1 -> Netgear (niezarządzany) -> Circle1 + USW-4-TV.
+// UniFi błędnie podaje Circle1 jako wpięty w port uplinkowy USW-4-TV.
+$nm_devs = [
+    ['mac' => 'a8:9c:6c:8c:5a:08', 'name' => 'M-NET', 'type' => 'udm', 'state' => 1,
+     'port_table' => [['port_idx' => 1, 'name' => 'Neatgear'], ['port_idx' => 2, 'name' => 'Salon'], ['port_idx' => 5, 'name' => 'WAN1', 'is_uplink' => true]],
+     'lldp_table' => [['local_port_idx' => 1, 'chassis_id' => '1c:6a:1b:26:4f:ac'], ['local_port_idx' => 1, 'chassis_id' => '60:22:32:31:e1:5b'], ['local_port_idx' => 2, 'chassis_id' => '74:ac:b9:a8:b8:f6']]],
+    ['mac' => '60:22:32:31:e1:5b', 'name' => 'USW-4-TV', 'type' => 'usw', 'state' => 1,
+     'uplink' => ['uplink_mac' => '30:f7:0d:5f:fe:e6', 'uplink_remote_port' => 1], 'port_table' => [['port_idx' => 1, 'is_uplink' => true]],
+     'lldp_table' => [['local_port_idx' => 1, 'chassis_id' => '30:f7:0d:5f:fe:e6']]],
+    ['mac' => '1c:6a:1b:26:4f:ac', 'name' => 'Circle1', 'type' => 'uap', 'state' => 1,
+     'uplink' => ['uplink_mac' => '60:22:32:31:e1:5b', 'uplink_remote_port' => 1],
+     'lldp_table' => [['local_port_idx' => 1, 'chassis_id' => '60:22:32:31:e1:5b'], ['local_port_idx' => 1, 'chassis_id' => 'a8:9c:6c:8c:5a:08']]],
+    ['mac' => '74:ac:b9:a8:b8:f6', 'name' => 'USW-4-K', 'type' => 'usw', 'state' => 0,
+     'uplink' => ['uplink_mac' => 'a8:9c:6c:8c:5a:08', 'uplink_remote_port' => 2]],
+];
+$nm_cl = [
+    ['name' => 'NAS', 'is_wired' => true, 'sw_mac' => 'a8:9c:6c:8c:5a:08', 'sw_port' => 1],
+    ['name' => 'Hub', 'is_wired' => true, 'sw_mac' => '74:ac:b9:a8:b8:f6', 'sw_port' => 4],
+    ['name' => 'Tel', 'is_wired' => false, 'ap_mac' => '1c:6a:1b:26:4f:ac', 'essid' => 'Dom'],
+];
+$nm = build_network_tree($nm_devs, $nm_cl);
+$nm_um = $nm['children'][0];
+t_assert('korzeń = brama', 'M-NET', $nm['name'], $total_pass, $total_fail);
+t_assert('port 1: switch niezarządzany', ['unmanaged', 1, 'Neatgear'], [$nm_um['kind'], $nm_um['port'], $nm_um['name']], $total_pass, $total_fail);
+t_assert('pod switchem Circle1 i USW-4-TV', ['Circle1', 'USW-4-TV'], array_column($nm_um['children'], 'name'), $total_pass, $total_fail);
+t_assert('MAC switcha z uplinku', '30:f7:0d:5f:fe:e6', $nm_um['mac'], $total_pass, $total_fail);
+t_assert('klient z portu 1 bramy pod switchem', ['NAS'], array_column($nm_um['clients'], 'name'), $total_pass, $total_fail);
+t_assert('port 2: USW-4-K offline', ['USW-4-K', 2, false], [$nm['children'][1]['name'], $nm['children'][1]['port'], $nm['children'][1]['online']], $total_pass, $total_fail);
+t_assert('klient WiFi przy AP', 'Tel', $nm_um['children'][0]['clients'][0]['name'], $total_pass, $total_fail);
+t_assert('brak urządzeń = null', null, build_network_tree([], []), $total_pass, $total_fail);
+
 echo "\n=== DashboardLayoutTest ===\n";
 require_once dirname(__DIR__) . '/includes/dashboard_layout.php';
 $dl = dw_sanitize_layout(['order' => ['vlan', 'vlan', 'Bad Id!', 'clients'], 'widgets' => [
