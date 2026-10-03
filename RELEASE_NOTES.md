@@ -2,14 +2,7 @@
 
 ## v2.6.0 (2026-10-03)
 
-Kontrola dostępu i reguły firewalla z poziomu MiniDash, edytor układu dashboardu, mapa sieci, sesje logowania oraz poprawki bezpieczeństwa.
-
-### ⚠️ Bezpieczeństwo - przeczytaj przed aktualizacją
-- **Instalacje na Apache / Synology Web Station:** w katalogu głównym nie było `.htaccess`, więc przez HTTP dało się pobrać `.env` (klucz API UniFi, hasło admina), całe `.git/` i `data/.encryption_key`. Nowy `.htaccess` zwraca 403 dla ukrytych plików i katalogów (poza `.well-known`), `includes/`, `migrations/`, `tests/`, `docker/`, `docs/` oraz plików `*.sql`, `*.sh`, `*.md`, `*.example`. Docker (nginx) już wcześniej blokował `.env` i `.git`
-- `events.php` i `settings_notifications.php` działały **bez logowania** - widać było token bota Telegram i dane SMTP, a POST nadpisywał konfigurację powiadomień. Teraz wymagają sesji
-- `update_wan.php` z przeglądarki tylko po zalogowaniu (zwracał IP WAN i ruch); cron z CLI bez zmian
-- `api_detect_site.php` (kreator instalacji) zamknięty po instalacji - wcześniej pozwalał kazać serwerowi łączyć się z dowolnym adresem
-- **Po aktualizacji sprawdź** spoza sieci, że `/.env`, `/.git/config`, `/data/.encryption_key` i `/data/config.json` zwracają 403 (gotowa komenda w `docs/INSTALL.md`). Jeśli panel był dostępny z internetu, rozważ wymianę klucza API UniFi, hasła admina, tokenu Telegrama i hasła SMTP
+Kontrola dostępu i reguły firewalla z poziomu MiniDash, edytor dashboardu, mapa sieci i sesje logowania.
 
 ### Kontrola dostępu
 - Przełączanie obiektów z UniFi **Settings → Objects** (blokady, harmonogramy) prosto z dashboardu
@@ -21,33 +14,26 @@ Kontrola dostępu i reguły firewalla z poziomu MiniDash, edytor układu dashboa
 - Nowa strona z regułami firewalla (Integration API) i macierzą stref: domyślne zachowanie ruchu między każdą parą stref plus znaczniki Twoich reguł; kliknięcie komórki pokazuje reguły tej pary
 - Włączanie i wyłączanie własnych reguł; reguły predefiniowane tylko do podglądu
 
-### Sesje i historia logowań (`account_security.php`)
-- Lista aktywnych sesji (urządzenie, IP, ostatnia aktywność) z możliwością zakończenia dowolnej z nich
-- Pełna historia logowań
-- Ostrzeżenie o podejrzanej sesji i alert na Telegramie: logowanie spoza Polski albo z nowego IP i niewidzianego wcześniej zestawu system + przeglądarka (samo nowe IP nie wystarcza - telefon zmienia je co chwilę)
-- Zakończona sesja wylogowuje przy następnym żądaniu (`includes/session_guard.php`); migracja `005_user_sessions.sql`
+### Sesje i historia logowań
+- Aktywne sesje z możliwością zakończenia, pełna historia logowań
+- Ostrzeżenie i alert na Telegramie przy podejrzanym logowaniu
 
 ### Edytor dashboardu
-- Przycisk „Konfiguruj dashboard" w Danych osobistych: przeciąganie kafelków, szerokość (½, 1-5 kolumn), wysokość (auto, mini, 1-4 rzędy), ukrywanie, „Przywróć domyślny"
-- Układ zapisywany na serwerze (`data/dashboard_layout.json`), więc taki sam na każdym urządzeniu
-- Siatka w półkolumnach: dwa mikro-kafelki „½" mieszczą się w miejscu jednego zwykłego
-- Kafelki układają się bez dziur (masonry wyrównane do siatki), wykres WAN równo z kafelkami, bez zbędnych pasków przewijania
-- SortableJS ładowany tylko w trybie edycji
+- „Konfiguruj dashboard" w Danych osobistych: przeciąganie, zmiana rozmiaru i ukrywanie kafelków
+- Układ zapisywany na serwerze, taki sam na każdym urządzeniu
 
 ### Mapa sieci
-- W oknie „Urządzenia UniFi" przełącznik **Lista / Mapa** (wybór zapamiętany w przeglądarce)
-- Drzewo od bramy w dół: porty, urządzenia, status online/offline, klienci po kliknięciu w licznik (IP, port albo SSID)
-- **Switche niezarządzane wykrywane automatycznie z LLDP**: kilka urządzeń UniFi (albo urządzenie i klienci przewodowi) na jednym porcie = switch pomiędzy. Wstawiany jest wirtualny węzeł nazwany jak port w UniFi, a pod nim urządzenia i klienci z tego portu. Dzięki temu mapa nie powiela błędnych uplinków, które kontroler zgłasza dla sprzętu za zwykłym switchem
-- Logika w czystej funkcji `build_network_tree()` (`includes/network_map.php`), pokrytej testami
+- W oknie „Urządzenia UniFi" przełącznik Lista / Mapa: topologia od bramy w dół, z klientami i statusem urządzeń
+- Automatyczne wykrywanie switchy niezarządzanych
 
 ### Poprawki
-- **Strefa czasowa z ustawień jest wreszcie stosowana.** „Auto" bierze strefę konsoli z `get/setting` → `locale` (wcześniej szukana w pustym `get/setting/system`, przez co panel pokazywał „Z konsoli (UTC)", a PHP używało strefy z `php.ini`). Strefa konsoli zapamiętywana na dobę w `data/console_timezone.txt`
-- Statystyki w pasku nawigacji na wszystkich stronach (Firewall, Zdarzenia, Powiadomienia)
-- Zapis „Dane osobiste" nic nie robił - przycisk był poza formularzem
-- Brakujące tłumaczenia EN; testy 149/149
+- Poprawki bezpieczeństwa
+- Ustawienie strefy czasowej jest stosowane
+- Statystyki w pasku nawigacji na wszystkich stronach
+- Zapis „Dane osobiste", brakujące tłumaczenia EN
 
 ### Znane problemy
-- `logs.php` nie wyświetla logów: `api_logs.php` odpowiada poprawnie, ale zwraca pustą listę. Do poprawy w następnej wersji
+- Strona logów nie wyświetla wpisów - do poprawy w następnej wersji
 
 ---
 
