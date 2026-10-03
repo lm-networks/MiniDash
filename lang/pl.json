@@ -674,5 +674,32 @@
         "day_fri": "pt",
         "day_sat": "sob",
         "day_sun": "nd"
+    },
+    "firewall": {
+        "title": "Reguły firewalla",
+        "own_rules": "własnych reguł",
+        "blocking": "blokujących",
+        "disabled": "wyłączonych",
+        "total": "wszystkich",
+        "search": "Szukaj reguły, sieci, IP...",
+        "all_actions": "Wszystkie akcje",
+        "show_system": "Pokaż systemowe",
+        "load_error": "Nie udało się pobrać reguł z konsoli",
+        "no_match": "Brak reguł pasujących do filtrów",
+        "toggle_hint": "Włącz / wyłącz regułę w konsoli",
+        "system_rule": "Reguła systemowa - tylko podgląd",
+        "confirm_on": "Włączyć regułę",
+        "confirm_off": "Wyłączyć regułę",
+        "toggle_error": "Nie udało się zmienić reguły:",
+        "log_on": "Włączono regułę firewalla",
+        "log_off": "Wyłączono regułę firewalla",
+        "hits": "Liczba trafień reguły",
+        "last_hit": "ostatnio",
+        "just_now": "przed chwilą",
+        "except": "oprócz",
+        "any": "dowolne",
+        "region": "region",
+        "apps": "aplikacji",
+        "app_categories": "kategorii aplikacji"
     }
 }

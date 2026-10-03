@@ -1608,6 +1608,130 @@ function set_access_object_enabled(string $id, bool $enabled): array
 }
 
 /**
+ * Opis jednej strony reguły firewalla (źródło albo cel) po ludzku:
+ * nazwy sieci, grup, klientów zamiast identyfikatorów, plus porty.
+ * Czysta funkcja — mapy nazw przychodzą z zewnątrz.
+ */
+function fw_side_label(array $s, array $maps): string
+{
+    $not = fn(string $flag) => !empty($s[$flag]) ? __('firewall.except') . ' ' : '';
+    $names = fn(array $ids, array $map) => implode(', ', array_map(fn($i) => $map[$i] ?? $i, $ids));
+
+    switch ($s['matching_target'] ?? 'ANY') {
+        case 'NETWORK':
+            $what = $not('match_opposite_networks') . $names((array)($s['network_ids'] ?? []), $maps['networks'] ?? []);
+            break;
+        case 'IP':
+            if (($s['matching_target_type'] ?? '') === 'OBJECT' && !empty($s['ip_group_id'])) {
+                $what = $not('match_opposite_ips') . ($maps['groups'][$s['ip_group_id']] ?? $s['ip_group_id']);
+            } else {
+                $ips = (array)($s['ips'] ?? []);
+                // Długie listy (np. blokady spamerów) skracamy — pełna lista idzie do tooltipa.
+                $what = $not('match_opposite_ips') . implode(', ', array_slice($ips, 0, 4))
+                      . (count($ips) > 4 ? ' +' . (count($ips) - 4) : '');
+            }
+            break;
+        case 'CLIENT':
+            $what = $names(array_map('strtolower', (array)($s['client_macs'] ?? [])), $maps['clients'] ?? []);
+            break;
+        case 'REGION':
+            $what = __('firewall.region') . ' ' . implode(', ', (array)($s['regions'] ?? []));
+            break;
+        case 'APP':
+            $what = count((array)($s['app_ids'] ?? [])) . ' ' . __('firewall.apps');
+            break;
+        case 'APP_CATEGORY':
+            $what = count((array)($s['app_category_ids'] ?? [])) . ' ' . __('firewall.app_categories');
+            break;
+        default:
+            $what = __('firewall.any');
+    }
+
+    $pt = $s['port_matching_type'] ?? 'ANY';
+    if ($pt === 'SPECIFIC' && !empty($s['port'])) {
+        $what .= ' : ' . $not('match_opposite_ports') . $s['port'];
+    } elseif ($pt === 'OBJECT' && !empty($s['port_group_id'])) {
+        $what .= ' : ' . $not('match_opposite_ports') . ($maps['groups'][$s['port_group_id']] ?? $s['port_group_id']);
+    }
+    return $what;
+}
+
+/**
+ * Reguły firewalla (zone-based, v2 API) w postaci do wyświetlenia. Kolejność jak
+ * w konsoli: para stref, potem index.
+ */
+function get_firewall_view(): array
+{
+    $pols = fetch_api('/proxy/network/v2/api/site/default/firewall-policies');
+    if (isset($pols['error']) || !is_array($pols['data'] ?? null)) return ['zones' => [], 'rules' => [], 'error' => $pols['error'] ?? 'no data'];
+
+    $zones = [];
+    foreach ((fetch_api('/proxy/network/v2/api/site/default/firewall/zone')['data'] ?? []) as $z) {
+        if (!empty($z['_id'])) $zones[$z['_id']] = $z['name'] ?? $z['_id'];
+    }
+    $maps = ['networks' => [], 'groups' => [], 'clients' => []];
+    foreach ((fetch_api('/proxy/network/api/s/default/rest/networkconf')['data'] ?? []) as $n) {
+        if (!empty($n['_id'])) $maps['networks'][$n['_id']] = $n['name'] ?? $n['_id'];
+    }
+    foreach ((fetch_api('/proxy/network/api/s/default/rest/firewallgroup')['data'] ?? []) as $g) {
+        if (!empty($g['_id'])) $maps['groups'][$g['_id']] = trim((string)($g['name'] ?? $g['_id']));
+    }
+    foreach ((fetch_api('/proxy/network/api/s/default/rest/user')['data'] ?? []) as $u) {
+        $mac = strtolower($u['mac'] ?? '');
+        if ($mac) $maps['clients'][$mac] = $u['name'] ?? $u['hostname'] ?? $mac;
+    }
+
+    $rules = [];
+    foreach ($pols['data'] as $p) {
+        if (!is_array($p) || empty($p['_id'])) continue;
+        $sz = $p['source']['zone_id'] ?? '';
+        $dz = $p['destination']['zone_id'] ?? '';
+        $proto = strtolower((string)($p['protocol'] ?? 'all'));
+        $rules[] = [
+            'id'         => $p['_id'],
+            'name'       => trim((string)($p['name'] ?? '')),
+            'action'     => strtoupper((string)($p['action'] ?? '')),
+            'enabled'    => !empty($p['enabled']),
+            'user'       => empty($p['predefined']),
+            'index'      => (int)($p['index'] ?? 0),
+            'src_zone'   => $zones[$sz] ?? '?',
+            'dst_zone'   => $zones[$dz] ?? '?',
+            'src'        => fw_side_label((array)($p['source'] ?? []), $maps),
+            'dst'        => fw_side_label((array)($p['destination'] ?? []), $maps),
+            'ips_full'   => implode(', ', array_merge((array)($p['source']['ips'] ?? []), (array)($p['destination']['ips'] ?? []))),
+            'protocol'   => $proto === 'all' ? '' : str_replace('_', '/', $proto),
+            'schedule'   => ($p['schedule']['mode'] ?? 'ALWAYS') === 'ALWAYS' ? '' : oon_schedule_label($p['schedule']),
+            'hits'       => isset($p['hits']) ? (int)$p['hits'] : null,
+            'last_hit'   => !empty($p['last_hit']) ? (int)floor($p['last_hit'] / 1000) : null,
+            'logging'    => !empty($p['logging']),
+            'ip_version' => $p['ip_version'] ?? '',
+        ];
+    }
+    usort($rules, fn($a, $b) => [$a['src_zone'], $a['dst_zone'], $a['user'] ? 0 : 1, $a['index']] <=> [$b['src_zone'], $b['dst_zone'], $b['user'] ? 0 : 1, $b['index']]);
+    return ['zones' => array_values($zones), 'rules' => $rules, 'error' => null];
+}
+
+/**
+ * Włącza/wyłącza WŁASNĄ regułę firewalla (systemowych i pochodnych nie ruszamy).
+ * Odsyła aktualną wersję reguły z konsoli z samą zmianą `enabled`.
+ */
+function set_firewall_policy_enabled(string $id, bool $enabled): array
+{
+    if (!preg_match('/^[a-f0-9]{24}$/i', $id)) return ['ok' => false, 'error' => 'invalid id'];
+    $pol = null;
+    foreach ((fetch_api('/proxy/network/v2/api/site/default/firewall-policies')['data'] ?? []) as $p) {
+        if (($p['_id'] ?? '') === $id) { $pol = $p; break; }
+    }
+    if (!$pol) return ['ok' => false, 'error' => 'not found'];
+    if (!empty($pol['predefined'])) return ['ok' => false, 'error' => 'predefined rule'];
+
+    $pol['enabled'] = $enabled;
+    $r = fetch_api_request('PUT', '/proxy/network/v2/api/site/default/firewall-policies/' . $id, $pol);
+    if ($r['error'] || !is_array($r['data'])) return ['ok' => false, 'error' => $r['error'] ?? 'bad response'];
+    return ['ok' => ((bool)($r['data']['enabled'] ?? !$enabled)) === $enabled, 'name' => trim((string)($pol['name'] ?? '')), 'error' => null];
+}
+
+/**
  * Skleja próbki „łącze w dole" z wan_stats w przerwy.
  *
  * Czysta funkcja — dostęp do bazy idzie przez $next_up, żeby logikę dało się
@@ -2825,6 +2949,9 @@ function render_nav($title = "MiniDash", $stats = []) {
                     <a href="security.php" class="p-2.5 rounded-xl transition-all <?= $current_page == 'security.php' ? 'bg-rose-600/10 text-rose-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5' ?>" title="Security">
                         <i data-lucide="shield" class="w-5 h-5"></i>
                     </a>
+                    <a href="firewall.php" class="p-2.5 rounded-xl transition-all <?= $current_page == 'firewall.php' ? 'bg-orange-600/10 text-orange-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5' ?>" title="<?= __('firewall.title') ?>">
+                        <i data-lucide="brick-wall" class="w-5 h-5"></i>
+                    </a>
                     <a href="logs.php" class="p-2.5 rounded-xl transition-all <?= $current_page == 'logs.php' ? 'bg-amber-600/10 text-amber-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5' ?>" title="Logs">
                         <i data-lucide="file-text" class="w-5 h-5"></i>
                     </a>
@@ -2917,6 +3044,9 @@ function render_nav($title = "MiniDash", $stats = []) {
                                  <?php endif; ?>
                                   <a href="security.php" class="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 border border-white/5 <?= $current_page == 'security.php' ? 'bg-rose-600/20 text-rose-400 ring-1 ring-rose-500/50' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 hover:text-white' ?>" title="Security">
                                     <i data-lucide="shield" class="w-5 h-5"></i>
+                                 </a>
+                                 <a href="firewall.php" class="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 border border-white/5 <?= $current_page == 'firewall.php' ? 'bg-orange-600/20 text-orange-400 ring-1 ring-orange-500/50' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 hover:text-white' ?>" title="<?= __('firewall.title') ?>">
+                                    <i data-lucide="brick-wall" class="w-5 h-5"></i>
                                  </a>
                                  <a href="logs.php" class="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 border border-white/5 <?= $current_page == 'logs.php' ? 'bg-amber-600/20 text-amber-400 ring-1 ring-amber-500/50' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 hover:text-white' ?>" title="Logs">
                                     <i data-lucide="file-text" class="w-5 h-5"></i>

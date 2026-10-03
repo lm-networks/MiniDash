@@ -666,5 +666,32 @@
         "day_fri": "Fri",
         "day_sat": "Sat",
         "day_sun": "Sun"
+    },
+    "firewall": {
+        "title": "Firewall rules",
+        "own_rules": "own rules",
+        "blocking": "blocking",
+        "disabled": "disabled",
+        "total": "total",
+        "search": "Search rule, network, IP...",
+        "all_actions": "All actions",
+        "show_system": "Show system rules",
+        "load_error": "Could not load rules from the console",
+        "no_match": "No rules match the filters",
+        "toggle_hint": "Enable / disable the rule on the console",
+        "system_rule": "System rule - read only",
+        "confirm_on": "Enable rule",
+        "confirm_off": "Disable rule",
+        "toggle_error": "Could not change the rule:",
+        "log_on": "Firewall rule enabled",
+        "log_off": "Firewall rule disabled",
+        "hits": "Rule hit count",
+        "last_hit": "last",
+        "just_now": "just now",
+        "except": "except",
+        "any": "any",
+        "region": "region",
+        "apps": "apps",
+        "app_categories": "app categories"
     }
 }
