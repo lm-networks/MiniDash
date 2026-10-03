@@ -290,6 +290,26 @@ t_assert('up pomiędzy = osobna przerwa', '2026-09-02 08:00:00', $wo[1]['start']
 t_assert('brak próbek w dole', [], group_wan_outages([], $wo_next), $total_pass, $total_fail);
 
 // ═══════════════════════════════════════
+echo "\n=== AccessScheduleTest ===\n";
+// 2026-10-05 to poniedziałek
+$tz_prev = date_default_timezone_get();
+date_default_timezone_set('Europe/Warsaw');
+$at = fn(string $s) => strtotime($s);
+$week_all = ['mode' => 'EVERY_WEEK', 'repeat_on_days' => ['mon','tue','wed','thu','fri','sat','sun'], 'time_all_day' => false, 'time_range_start' => '00:15', 'time_range_end' => '07:00'];
+t_assert('always', true, oon_schedule_active(['mode' => 'ALWAYS'], $at('2026-10-05 12:00')), $total_pass, $total_fail);
+t_assert('w oknie 00:15-07:00', true, oon_schedule_active($week_all, $at('2026-10-05 03:00')), $total_pass, $total_fail);
+t_assert('przed oknem', false, oon_schedule_active($week_all, $at('2026-10-05 00:10')), $total_pass, $total_fail);
+t_assert('koniec okna wyłącznie', false, oon_schedule_active($week_all, $at('2026-10-05 07:00')), $total_pass, $total_fail);
+$night = ['mode' => 'EVERY_WEEK', 'repeat_on_days' => ['fri'], 'time_all_day' => false, 'time_range_start' => '22:00', 'time_range_end' => '07:00'];
+t_assert('przez północ: pt 23:00', true, oon_schedule_active($night, $at('2026-10-09 23:00')), $total_pass, $total_fail);
+t_assert('przez północ: sob 06:00 (z piątku)', true, oon_schedule_active($night, $at('2026-10-10 06:00')), $total_pass, $total_fail);
+t_assert('przez północ: pt 06:00 (czw nie zaznaczony)', false, oon_schedule_active($night, $at('2026-10-09 06:00')), $total_pass, $total_fail);
+$weekend = ['mode' => 'EVERY_WEEK', 'repeat_on_days' => ['sat','sun'], 'time_all_day' => true];
+t_assert('cały dzień sob', true, oon_schedule_active($weekend, $at('2026-10-10 15:00')), $total_pass, $total_fail);
+t_assert('cały dzień pn', false, oon_schedule_active($weekend, $at('2026-10-05 15:00')), $total_pass, $total_fail);
+date_default_timezone_set($tz_prev);
+
+// ═══════════════════════════════════════
 echo "\n╔══════════════════════════════════════╗\n";
 $line = "  TOTAL: {$total_pass} passed, {$total_fail} failed";
 echo "║{$line}" . str_repeat(' ', 38 - strlen($line)) . "║\n";

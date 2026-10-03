@@ -648,5 +648,31 @@
         "gaps_desc": "Okresy dłuższe niż 10 min bez żadnej próbki - np. brak prądu albo niedziałający cron. To nie są awarie łącza: w tym czasie stan łączy jest nieznany.",
         "no_gaps": "Pomiary bez przerw",
         "link": "Historia awarii"
+    },
+    "access": {
+        "title": "Kontrola dostępu",
+        "subtitle": "Obiekty z konsoli · Settings → Objects",
+        "active_now": "działa teraz",
+        "toggle_hint": "Włącz / wyłącz obiekt w konsoli",
+        "confirm_on": "Włączyć obiekt",
+        "confirm_off": "Wyłączyć obiekt",
+        "toggle_error": "Nie udało się zmienić obiektu:",
+        "log_on": "Włączono obiekt",
+        "log_off": "Wyłączono obiekt",
+        "mode_internet_off": "wyłącza internet",
+        "mode_blocklist": "blokuje wybrane aplikacje i strony",
+        "mode_other": "bez blokady",
+        "always": "zawsze",
+        "every_day": "codziennie",
+        "weekdays": "pn-pt",
+        "weekend": "sob-nd",
+        "all_day": "cały dzień",
+        "day_mon": "pn",
+        "day_tue": "wt",
+        "day_wed": "śr",
+        "day_thu": "czw",
+        "day_fri": "pt",
+        "day_sat": "sob",
+        "day_sun": "nd"
     }
 }

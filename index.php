@@ -709,13 +709,15 @@ try {
         usort($top_talkers, fn($a, $b) => $b['total'] <=> $a['total']);
         $top_talkers = array_slice($top_talkers, 0, 5);
         $tt_max = $top_talkers ? max(1, $top_talkers[0]['total']) : 1;
+        $access_objects = get_access_objects();
         ?>
         </div>
 
-        <?php if ($top_talkers): ?>
+        <?php if ($top_talkers || $access_objects): ?>
         <!-- Siatka pięciu kolumn taka sama jak w rzędzie kafelków statystyk u góry strony,
              więc col-span-3 daje dokładnie szerokość trzech kafelków (z ich odstępami). -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
+            <?php if ($top_talkers): ?>
             <div class="glass-card p-6 sm:col-span-2 lg:col-span-3">
                 <div class="flex items-center gap-3 mb-6">
                     <div class="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400">
@@ -748,6 +750,45 @@ try {
                     <?php endforeach; ?>
                 </div>
             </div>
+            <?php endif; ?>
+
+            <?php if ($access_objects): ?>
+            <!-- Kontrola dostępu: obiekty z Settings → Objects w konsoli, przełączane stąd -->
+            <div class="glass-card p-6 sm:col-span-2 lg:col-span-2" id="access-card">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-400">
+                        <i data-lucide="shield-ban" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold tracking-tight"><?= __('access.title') ?></h2>
+                        <p class="text-[11px] text-slate-500 font-bold uppercase tracking-widest"><?= __('access.subtitle') ?></p>
+                    </div>
+                </div>
+                <div class="space-y-3">
+                    <?php foreach ($access_objects as $ao): ?>
+                    <div class="p-3 rounded-2xl bg-slate-900/40 border border-white/5" data-access-id="<?= htmlspecialchars($ao['id']) ?>" data-access-name="<?= htmlspecialchars($ao['name']) ?>">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[13px] font-black text-slate-200 truncate"><?= htmlspecialchars($ao['name']) ?></span>
+                                    <span data-access-badge class="<?= $ao['active'] ? '' : 'hidden ' ?>px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-rose-500/20 text-rose-400"><?= __('access.active_now') ?></span>
+                                </div>
+                                <div class="text-[11px] text-slate-500 truncate" title="<?= htmlspecialchars(implode(', ', $ao['targets'])) ?>">
+                                    <?= htmlspecialchars($ao['what']) ?><?= $ao['schedule'] !== '' ? ' · ' . htmlspecialchars($ao['schedule']) : '' ?>
+                                </div>
+                                <div class="text-[11px] text-slate-600 truncate"><?= htmlspecialchars(implode(', ', $ao['targets'])) ?></div>
+                            </div>
+                            <button type="button" role="switch" aria-checked="<?= $ao['enabled'] ? 'true' : 'false' ?>"
+                                    onclick="toggleAccessObject(this)" title="<?= htmlspecialchars(__('access.toggle_hint'), ENT_QUOTES) ?>"
+                                    class="access-switch shrink-0 relative w-11 h-6 rounded-full transition-colors <?= $ao['enabled'] ? 'bg-rose-500' : 'bg-slate-700' ?>">
+                                <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform <?= $ao['enabled'] ? 'translate-x-5' : '' ?>"></span>
+                            </button>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
 
@@ -1410,6 +1451,38 @@ try {
                 card.style.borderColor = on ? 'transparent' : '';
             });
         }
+
+        // ─── Kontrola dostępu: przełącznik obiektu z Settings → Objects ─────────
+        window.toggleAccessObject = async function toggleAccessObject(btn) {
+            const row = btn.closest('[data-access-id]');
+            if (!row || btn.disabled) return;
+            const want = btn.getAttribute('aria-checked') !== 'true';
+            const name = row.getAttribute('data-access-name') || '';
+            if (!confirm((want ? <?= json_encode(__('access.confirm_on')) ?> : <?= json_encode(__('access.confirm_off')) ?>) + ' ' + name + '?')) return;
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            try {
+                const res = await fetch('api_access_toggle.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode(csrf_token()) ?> },
+                    body: JSON.stringify({ id: row.getAttribute('data-access-id'), enabled: want })
+                });
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message || ('HTTP ' + res.status));
+                const on = json.object ? json.object.enabled : want;
+                btn.setAttribute('aria-checked', on ? 'true' : 'false');
+                btn.classList.toggle('bg-rose-500', on);
+                btn.classList.toggle('bg-slate-700', !on);
+                btn.firstElementChild.classList.toggle('translate-x-5', on);
+                const badge = row.querySelector('[data-access-badge]');
+                if (badge && json.object) badge.classList.toggle('hidden', !json.object.active);
+            } catch (e) {
+                alert(<?= json_encode(__('access.toggle_error')) ?> + ' ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.style.opacity = '';
+            }
+        };
 
         // Function to update stats
         window.updateStats = function updateStats() {

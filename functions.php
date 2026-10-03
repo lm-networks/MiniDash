@@ -1468,6 +1468,146 @@ function get_wan_links(?array $trad_gateway): array
 }
 
 /**
+ * Zapytanie do API konsoli z dowolną metodą (PUT/DELETE/POST) i ciałem JSON.
+ * Zwraca ['code' => int, 'data' => mixed, 'error' => ?string].
+ */
+function fetch_api_request(string $method, string $endpoint, ?array $payload = null, int $timeout = 10): array
+{
+    global $config;
+    if (!function_exists('curl_init')) return ['code' => 0, 'data' => null, 'error' => 'cURL not installed'];
+
+    $ch = curl_init(rtrim($config['controller_url'], '/') . '/' . ltrim($endpoint, '/'));
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_CUSTOMREQUEST  => $method,
+        CURLOPT_HTTPHEADER     => ['X-API-KEY: ' . $config['api_key'], 'Content-Type: application/json'],
+    ]);
+    if ($payload !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    $out  = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+
+    if ($out === false) return ['code' => $code, 'data' => null, 'error' => $err ?: 'request failed'];
+    return ['code' => $code, 'data' => json_decode($out, true), 'error' => $code >= 400 ? "HTTP $code" : null];
+}
+
+/**
+ * Czy harmonogram obiektu (Settings → Objects) obejmuje podany moment.
+ * Czysta funkcja — testowalna bez API. Zakres godzin może przechodzić przez północ
+ * (np. 22:00–07:00): wtedy część „po północy" należy do dnia, w którym zakres się zaczął.
+ */
+function oon_schedule_active(?array $sched, int $ts): bool
+{
+    $mode = $sched['mode'] ?? 'ALWAYS';
+    if ($mode === 'ALWAYS' || $sched === null) return true;
+    if (!in_array($mode, ['EVERY_DAY', 'EVERY_WEEK'], true)) return false;
+
+    $all  = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    $days = $mode === 'EVERY_DAY' ? $all : array_map('strtolower', (array)($sched['repeat_on_days'] ?? []));
+    $today     = $all[(int)date('w', $ts)];
+    $yesterday = $all[((int)date('w', $ts) + 6) % 7];
+    if (!empty($sched['time_all_day'])) return in_array($today, $days, true);
+
+    $now   = date('H:i', $ts);
+    $start = (string)($sched['time_range_start'] ?? '00:00');
+    $end   = (string)($sched['time_range_end'] ?? '23:59');
+    if ($start <= $end) {
+        return in_array($today, $days, true) && $now >= $start && $now < $end;
+    }
+    // Zakres przez północ
+    return (in_array($today, $days, true) && $now >= $start)
+        || (in_array($yesterday, $days, true) && $now < $end);
+}
+
+/** Opis harmonogramu po ludzku, np. „pn-pt 22:00–07:00" albo „zawsze". */
+function oon_schedule_label(?array $sched): string
+{
+    $mode = $sched['mode'] ?? 'ALWAYS';
+    if ($mode === 'ALWAYS' || $sched === null) return __('access.always');
+    $order = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    $days  = $mode === 'EVERY_DAY' ? $order : array_map('strtolower', (array)($sched['repeat_on_days'] ?? []));
+    $days  = array_values(array_intersect($order, $days));
+    if (count($days) === 7)                                  $d = __('access.every_day');
+    elseif ($days === ['mon', 'tue', 'wed', 'thu', 'fri'])   $d = __('access.weekdays');
+    elseif ($days === ['sat', 'sun'])                        $d = __('access.weekend');
+    else $d = implode(', ', array_map(fn($x) => __('access.day_' . $x), $days));
+    if (!empty($sched['time_all_day'])) return $d . ', ' . __('access.all_day');
+    return $d . ' ' . ($sched['time_range_start'] ?? '?') . '-' . ($sched['time_range_end'] ?? '?');
+}
+
+/**
+ * Obiekty z Settings → Objects w postaci do wyświetlenia: nazwa, stan, co robią,
+ * harmonogram, czy działają TERAZ i komu (nazwy urządzeń / sieci zamiast MAC-ów).
+ */
+function get_access_objects(): array
+{
+    $raw = fetch_api('/proxy/network/v2/api/site/default/object-oriented-network-configs');
+    $list = $raw['data'] ?? [];
+    if (!is_array($list) || isset($raw['error'])) return [];
+
+    // MAC → nazwa ze wszystkich znanych klientów (także offline), id sieci → nazwa.
+    $names = [];
+    foreach ((fetch_api('/proxy/network/api/s/default/rest/user')['data'] ?? []) as $u) {
+        $mac = strtolower($u['mac'] ?? '');
+        if ($mac) $names[$mac] = $u['name'] ?? $u['hostname'] ?? $mac;
+    }
+    $nets = [];
+    foreach ((fetch_api('/proxy/network/api/s/default/rest/networkconf')['data'] ?? []) as $n) {
+        if (!empty($n['_id'])) $nets[$n['_id']] = $n['name'] ?? $n['_id'];
+    }
+
+    $out = [];
+    foreach ($list as $o) {
+        if (!is_array($o) || empty($o['id'])) continue;
+        $sched = $o['secure']['internet']['schedule'] ?? null;
+        $mode  = $o['secure']['internet']['mode'] ?? null;
+        $targets = [];
+        foreach ((array)($o['targets'] ?? []) as $t) {
+            $v = (string)($t['value'] ?? '');
+            if (($t['type'] ?? '') === 'MAC') $targets[] = $names[strtolower($v)] ?? $v;
+            else $targets[] = $nets[$v] ?? $v;
+        }
+        $secure_on = !empty($o['secure']['enabled']);
+        $out[] = [
+            'id'        => $o['id'],
+            'name'      => trim((string)($o['name'] ?? '')),
+            'enabled'   => !empty($o['enabled']),
+            'what'      => $secure_on && $mode === 'TURN_OFF_INTERNET' ? __('access.mode_internet_off')
+                         : ($secure_on && $mode === 'BLOCKLIST' ? __('access.mode_blocklist')
+                         : ($secure_on && $mode ? strtolower(str_replace('_', ' ', $mode)) : __('access.mode_other'))),
+            'schedule'  => $secure_on ? oon_schedule_label($sched) : '',
+            'active'    => !empty($o['enabled']) && $secure_on && oon_schedule_active($sched, time()),
+            'targets'   => $targets,
+            'target_type' => $o['target_type'] ?? '',
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Włącza/wyłącza obiekt. Pobiera aktualną wersję z konsoli i odsyła ją z samą zmianą
+ * flagi `enabled` — nic innego w konfiguracji obiektu się nie zmienia.
+ */
+function set_access_object_enabled(string $id, bool $enabled): array
+{
+    if (!preg_match('/^[a-f0-9]{24}$/i', $id)) return ['ok' => false, 'error' => 'invalid id'];
+    $list = fetch_api('/proxy/network/v2/api/site/default/object-oriented-network-configs')['data'] ?? [];
+    $obj = null;
+    foreach ((array)$list as $o) if (($o['id'] ?? '') === $id) { $obj = $o; break; }
+    if (!$obj) return ['ok' => false, 'error' => 'not found'];
+
+    $obj['enabled'] = $enabled;
+    $r = fetch_api_request('PUT', '/proxy/network/v2/api/site/default/object-oriented-network-config/' . $id, $obj);
+    if ($r['error'] || !is_array($r['data'])) return ['ok' => false, 'error' => $r['error'] ?? 'bad response'];
+    return ['ok' => ((bool)($r['data']['enabled'] ?? !$enabled)) === $enabled, 'name' => trim((string)($obj['name'] ?? '')), 'error' => null];
+}
+
+/**
  * Skleja próbki „łącze w dole" z wan_stats w przerwy.
  *
  * Czysta funkcja — dostęp do bazy idzie przez $next_up, żeby logikę dało się

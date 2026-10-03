@@ -640,5 +640,31 @@
         "gaps_desc": "Periods longer than 10 min without any sample - e.g. power loss or a stopped cron. These are not link outages: the link state is unknown during them.",
         "no_gaps": "No measurement gaps",
         "link": "Outage history"
+    },
+    "access": {
+        "title": "Access control",
+        "subtitle": "Console objects · Settings → Objects",
+        "active_now": "active now",
+        "toggle_hint": "Enable / disable the object on the console",
+        "confirm_on": "Enable object",
+        "confirm_off": "Disable object",
+        "toggle_error": "Could not change the object:",
+        "log_on": "Object enabled",
+        "log_off": "Object disabled",
+        "mode_internet_off": "turns internet off",
+        "mode_blocklist": "blocks selected apps and sites",
+        "mode_other": "no blocking",
+        "always": "always",
+        "every_day": "every day",
+        "weekdays": "Mon-Fri",
+        "weekend": "Sat-Sun",
+        "all_day": "all day",
+        "day_mon": "Mon",
+        "day_tue": "Tue",
+        "day_wed": "Wed",
+        "day_thu": "Thu",
+        "day_fri": "Fri",
+        "day_sat": "Sat",
+        "day_sun": "Sun"
     }
 }
