@@ -86,7 +86,10 @@
         "total_blocked": "Total blocked",
         "active_count": "Active",
         "critical_count": "Critical",
-        "coming_soon": "Coming Soon"
+        "coming_soon": "Coming Soon",
+        "day": "Day",
+        "week": "Week",
+        "month": "Month"
     },
     "dashboard": {
         "title": "MiniDash",
@@ -97,8 +100,8 @@
         "unifi_devices": "UniFi Devices",
         "wan_ingress": "Ingress",
         "wan_egress": "Egress",
-        "internet_to_router": "Internet \u2192 Router",
-        "router_to_internet": "Router \u2192 Internet",
+        "internet_to_router": "Internet → Router",
+        "router_to_internet": "Router → Internet",
         "wifi_sessions": "WiFi Sessions",
         "wan_offline": "No connection",
         "wan_1": "WAN 1",
@@ -781,7 +784,7 @@
         "w_top_talkers": "Top talkers",
         "w_access": "Access control",
         "w_access_bar": "Quick toggles bar (Access control)"
-    },
+    },
     "netmap": {
         "view_list": "List",
         "view_map": "Map",
@@ -790,5 +793,36 @@
         "unmanaged": "Unmanaged switch",
         "unmanaged_hint": "Dashed frame = unmanaged switch invisible to UniFi. Detected from LLDP: several devices seen on one port. The name comes from the UniFi port name.",
         "empty": "No device data."
+    },
+    "transfer": {
+        "title": "Transfer",
+        "subtitle": "Data usage per device and VLAN",
+        "by_device": "Per device",
+        "by_vlan": "Per VLAN",
+        "device": "Device",
+        "download": "Download",
+        "upload": "Upload",
+        "total": "Total",
+        "loading": "Loading...",
+        "error": "Failed to load data",
+        "empty": "No data in this range"
+    },
+    "inventory": {
+        "title": "Inventory",
+        "subtitle": "All seen devices: owner, note, approval of new ones",
+        "pending": "pending",
+        "approve_all": "Approve all",
+        "device": "Device",
+        "owner": "Owner",
+        "note": "Note",
+        "first_seen": "First seen",
+        "status": "Status",
+        "approved": "Approved",
+        "approve": "Approve",
+        "click_to_unapprove": "Click to revoke approval",
+        "empty": "No devices",
+        "saved": "Saved",
+        "error": "Error",
+        "confirm_all": "Approve all currently seen devices?"
     }
 }

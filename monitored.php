@@ -335,25 +335,27 @@ function formatUptime($seconds) {
                             <div>
                                 <span class="text-[11px] font-black text-slate-600 uppercase tracking-widest block mb-3"><?= __('common.data_usage') ?></span>
                                 <div class="grid grid-cols-3 gap-3 mb-3">
-                                     <!-- 24H -->
+                                     <!-- Dzień -->
                                      <div class="bg-slate-800/30 p-3 rounded-xl border border-white/5 text-center flex flex-col justify-center">
-                                         <span class="block text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1"><?= __('common.24h') ?></span>
+                                         <span class="block text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1"><?= __('common.day') ?></span>
                                          <span id="stat-24h" class="block text-sm font-mono text-slate-400">
                                             <div class="flex justify-center"><div class="w-3 h-3 border-2 border-slate-500 border-t-transparent rounded-full animate-spin"></div></div>
                                          </span>
                                      </div>
-                                     <!-- 7D -->
+                                     <!-- Tydzień -->
                                      <div class="bg-slate-800/30 p-3 rounded-xl border border-white/5 text-center flex flex-col justify-center">
-                                         <span class="block text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1"><?= __('common.7d') ?></span>
+                                         <span class="block text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1"><?= __('common.week') ?></span>
                                          <span id="stat-7d" class="block text-sm font-mono text-slate-400">
                                             <div class="flex justify-center"><div class="w-3 h-3 border-2 border-slate-500 border-t-transparent rounded-full animate-spin"></div></div>
                                          </span>
                                      </div>
-                                     <!-- Total -->
+                                     <!-- Miesiąc -->
                                      <div class="bg-slate-800/30 p-3 rounded-xl border border-blue-500/10 text-center flex flex-col justify-center relative overflow-hidden">
                                          <div class="absolute inset-0 bg-blue-500/5"></div>
-                                         <span class="block text-[12px] text-blue-400 font-bold uppercase tracking-wider mb-1 relative"><?= __('common.total') ?></span>
-                                         <span class="block text-sm font-mono text-blue-100 relative font-bold">${formatBytes((parseFloat(device.rx_bytes) || 0) + (parseFloat(device.tx_bytes) || 0))}</span>
+                                         <span class="block text-[12px] text-blue-400 font-bold uppercase tracking-wider mb-1 relative"><?= __('common.month') ?></span>
+                                         <span id="stat-30d" class="block text-sm font-mono text-blue-100 relative font-bold">
+                                            <div class="flex justify-center"><div class="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div></div>
+                                         </span>
                                      </div>
                                 </div>
                                 
@@ -401,17 +403,15 @@ function formatUptime($seconds) {
             fetch(`api_client_stats.php?mac=${encodeURIComponent(device.mac)}`)
                 .then(r => r.json())
                 .then(data => {
-                    if (data.stats_24h) {
-                        document.getElementById('stat-24h').innerText = formatBytes(data.stats_24h.total);
-                    }
-                    if (data.stats_7d) {
-                        document.getElementById('stat-7d').innerText = formatBytes(data.stats_7d.total);
-                    }
+                    if (data.stats_24h) document.getElementById('stat-24h').innerText = formatBytes(data.stats_24h.total);
+                    if (data.stats_7d)  document.getElementById('stat-7d').innerText  = formatBytes(data.stats_7d.total);
+                    if (data.stats_30d) document.getElementById('stat-30d').innerText = formatBytes(data.stats_30d.total);
                 })
                 .catch(e => {
                     console.error('Error fetching stats:', e);
                     document.getElementById('stat-24h').innerText = '-';
                     document.getElementById('stat-7d').innerText = '-';
+                    document.getElementById('stat-30d').innerText = '-';
                 });
         }
 

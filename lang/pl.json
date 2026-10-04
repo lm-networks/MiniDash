@@ -86,7 +86,10 @@
         "total_blocked": "Łącznie zablokowanych",
         "active_count": "Aktywnych",
         "critical_count": "Krytycznych",
-        "coming_soon": "Wkrótce"
+        "coming_soon": "Wkrótce",
+        "day": "Dzień",
+        "week": "Tydzień",
+        "month": "Miesiąc"
     },
     "dashboard": {
         "title": "MiniDash",
@@ -781,7 +784,7 @@
         "w_top_talkers": "Najwięksi konsumenci",
         "w_access": "Kontrola dostępu",
         "w_access_bar": "Pasek przełączników (Kontrola dostępu)"
-    },
+    },
     "netmap": {
         "view_list": "Lista",
         "view_map": "Mapa",
@@ -790,5 +793,36 @@
         "unmanaged": "Switch niezarządzany",
         "unmanaged_hint": "Przerywana ramka = switch niezarządzany, którego UniFi nie widzi. Wykryty z LLDP: na jednym porcie widać kilka urządzeń naraz. Nazwa pochodzi z nazwy portu w UniFi.",
         "empty": "Brak danych o urządzeniach."
+    },
+    "transfer": {
+        "title": "Transfer",
+        "subtitle": "Zużycie danych per urządzenie i VLAN",
+        "by_device": "Per urządzenie",
+        "by_vlan": "Per VLAN",
+        "device": "Urządzenie",
+        "download": "Pobrane",
+        "upload": "Wysłane",
+        "total": "Razem",
+        "loading": "Ładowanie...",
+        "error": "Błąd ładowania danych",
+        "empty": "Brak danych w tym zakresie"
+    },
+    "inventory": {
+        "title": "Inwentarz",
+        "subtitle": "Wszystkie widziane urządzenia: właściciel, notatka, zatwierdzanie nowych",
+        "pending": "niezatwierdzone",
+        "approve_all": "Zatwierdź wszystkie",
+        "device": "Urządzenie",
+        "owner": "Właściciel",
+        "note": "Notatka",
+        "first_seen": "Pierwsze widziane",
+        "status": "Status",
+        "approved": "Zatwierdzone",
+        "approve": "Zatwierdź",
+        "click_to_unapprove": "Kliknij, aby cofnąć zatwierdzenie",
+        "empty": "Brak urządzeń",
+        "saved": "Zapisano",
+        "error": "Błąd",
+        "confirm_all": "Zatwierdzić wszystkie obecnie widziane urządzenia?"
     }
 }

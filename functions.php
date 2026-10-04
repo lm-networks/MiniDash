@@ -2479,6 +2479,123 @@ function get_ips_status() {
 /**
  * Pobiera ostatnie zdarzenia ze wszystkich urządzeń
  */
+/**
+ * Transfer w oknie czasu z tabeli client_history.
+ *
+ * `rx_bytes`/`tx_bytes` to liczniki SKUMULOWANE od połączenia klienta (ze stat/sta),
+ * więc realny transfer = suma DODATNICH różnic między kolejnymi próbkami. Ujemne delty
+ * (reset licznika przy ponownym połączeniu) pomijamy. Sumowanie wprost było błędne -
+ * zawyżało wynik wielokrotnie.
+ *
+ * @param string $since wyrażenie SQLite, np. '-1 day', '-7 days', '-30 days'
+ * @param string $group 'mac' albo 'vlan'
+ * @param string $mac  opcjonalnie: policz tylko dla tego urządzenia (szybciej)
+ * @return array klucz => ['rx'=>int, 'tx'=>int, 'total'=>int]
+ */
+function transfer_window(PDO $db, string $since, string $group = 'mac', string $mac = ''): array
+{
+    $col = $group === 'vlan' ? 'vlan' : 'mac';
+    $params = [$since];
+    $macFilter = '';
+    if ($mac !== '') { $macFilter = ' AND mac = ?'; $params[] = $mac; }
+    // Delty liczymy ZAWSZE per mac (licznik jest per urządzenie), grupujemy dopiero sumę.
+    $sql = "SELECT $col AS k,
+                   SUM(CASE WHEN drx > 0 THEN drx ELSE 0 END) AS rx,
+                   SUM(CASE WHEN dtx > 0 THEN dtx ELSE 0 END) AS tx
+            FROM (
+                SELECT mac, vlan,
+                       rx_bytes - LAG(rx_bytes) OVER (PARTITION BY mac ORDER BY id) AS drx,
+                       tx_bytes - LAG(tx_bytes) OVER (PARTITION BY mac ORDER BY id) AS dtx
+                FROM client_history
+                WHERE seen_at >= datetime('now', ?)$macFilter
+            )
+            GROUP BY k";
+    $out = [];
+    try {
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $rx = (int)($r['rx'] ?? 0);
+            $tx = (int)($r['tx'] ?? 0);
+            $out[(string)$r['k']] = ['rx' => $rx, 'tx' => $tx, 'total' => $rx + $tx];
+        }
+    } catch (Throwable $e) {
+        return [];
+    }
+    return $out;
+}
+
+/**
+ * Inwentarz urządzeń: scala known_macs.json (nazwa + pierwsze widzenie),
+ * tabelę device_inventory (właściciel, notatka, zatwierdzenie) i - o ile dostępni -
+ * klientów na żywo (status online, IP, VLAN). Klucz = MAC znormalizowany.
+ *
+ * @return array lista [mac, mac_raw, name, first_seen, owner, note, approved,
+ *               approved_at, online, ip, vlan]
+ */
+function get_inventory(PDO $db, bool $with_live = true): array
+{
+    // 1. known_macs.json
+    $known = [];
+    $f = __DIR__ . '/data/known_macs.json';
+    if (is_file($f)) {
+        $j = json_decode((string)file_get_contents($f), true);
+        if (is_array($j)) {
+            foreach ($j as $mac => $d) {
+                if (!is_array($d) || $mac === '' || $mac[0] === '_') continue;
+                $known[normalize_mac($mac)] = ['mac_raw' => $mac, 'name' => $d['name'] ?? $mac, 'first_seen' => $d['first_seen'] ?? ''];
+            }
+        }
+    }
+
+    // 2. device_inventory
+    $inv = [];
+    foreach ($db->query("SELECT mac, owner, note, approved, approved_at FROM device_inventory", PDO::FETCH_ASSOC) as $r) {
+        $inv[normalize_mac($r['mac'])] = $r;
+    }
+
+    // 3. klienci na żywo (opcjonalnie)
+    $live = [];
+    if ($with_live) {
+        $site = $_SESSION['site_id'] ?? ($GLOBALS['config']['site'] ?? 'default');
+        $trad = get_trad_site_id($site);
+        $resp = fetch_api("/proxy/network/api/s/$trad/stat/sta");
+        foreach (($resp['data'] ?? []) as $c) {
+            $m = normalize_mac($c['mac'] ?? '');
+            if ($m === '') continue;
+            $live[$m] = [
+                'ip'   => $c['ip'] ?? '',
+                'vlan' => detect_vlan_id($c['ip'] ?? '', $c['vlan'] ?? null),
+                'name' => $c['name'] ?? $c['hostname'] ?? '',
+            ];
+        }
+    }
+
+    $macs = array_unique(array_merge(array_keys($known), array_keys($inv), array_keys($live)));
+    $out = [];
+    foreach ($macs as $m) {
+        $k = $known[$m] ?? [];
+        $i = $inv[$m] ?? [];
+        $l = $live[$m] ?? null;
+        $out[] = [
+            'mac'         => $m,
+            'mac_raw'     => $k['mac_raw'] ?? $m,
+            'name'        => $k['name'] ?? ($l['name'] ?? $m),
+            'first_seen'  => $k['first_seen'] ?? '',
+            'owner'       => $i['owner'] ?? '',
+            'note'        => $i['note'] ?? '',
+            'approved'    => (int)($i['approved'] ?? 0) === 1,
+            'approved_at' => $i['approved_at'] ?? '',
+            'online'      => $l !== null,
+            'ip'          => $l['ip'] ?? '',
+            'vlan'        => $l['vlan'] ?? null,
+        ];
+    }
+    // Niezatwierdzone najpierw, potem po nazwie.
+    usort($out, fn($a, $b) => [$a['approved'], mb_strtolower($a['name'])] <=> [$b['approved'], mb_strtolower($b['name'])]);
+    return $out;
+}
+
 function get_recent_events($limit = 10, $only_new = false) {
     global $config;
     
@@ -3035,6 +3152,12 @@ function render_nav($title = "MiniDash", $stats = []) {
                     <a href="logs.php" class="p-2.5 rounded-xl transition-all <?= $current_page == 'logs.php' ? 'bg-amber-600/10 text-amber-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5' ?>" title="Logs">
                         <i data-lucide="file-text" class="w-5 h-5"></i>
                     </a>
+                    <a href="transfer.php" class="p-2.5 rounded-xl transition-all <?= $current_page == 'transfer.php' ? 'bg-cyan-600/10 text-cyan-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5' ?>" title="<?= __('transfer.title') ?>">
+                        <i data-lucide="arrow-down-up" class="w-5 h-5"></i>
+                    </a>
+                    <a href="inventory.php" class="p-2.5 rounded-xl transition-all <?= $current_page == 'inventory.php' ? 'bg-teal-600/10 text-teal-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5' ?>" title="<?= __('inventory.title') ?>">
+                        <i data-lucide="boxes" class="w-5 h-5"></i>
+                    </a>
                     <a href="stalker.php" class="nav-icon p-2 rounded-xl hover:bg-white/5 transition" title="Wi-Fi Stalker">
                         <i data-lucide="radar" class="w-6 h-6 text-slate-400 hover:text-purple-400 transition"></i>
                     </a>
@@ -3130,6 +3253,12 @@ function render_nav($title = "MiniDash", $stats = []) {
                                  </a>
                                  <a href="logs.php" class="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 border border-white/5 <?= $current_page == 'logs.php' ? 'bg-amber-600/20 text-amber-400 ring-1 ring-amber-500/50' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 hover:text-white' ?>" title="Logs">
                                     <i data-lucide="file-text" class="w-5 h-5"></i>
+                                 </a>
+                                 <a href="transfer.php" class="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 border border-white/5 <?= $current_page == 'transfer.php' ? 'bg-cyan-600/20 text-cyan-400 ring-1 ring-cyan-500/50' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 hover:text-white' ?>" title="<?= __('transfer.title') ?>">
+                                    <i data-lucide="arrow-down-up" class="w-5 h-5"></i>
+                                 </a>
+                                 <a href="inventory.php" class="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 border border-white/5 <?= $current_page == 'inventory.php' ? 'bg-teal-600/20 text-teal-400 ring-1 ring-teal-500/50' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 hover:text-white' ?>" title="<?= __('inventory.title') ?>">
+                                    <i data-lucide="boxes" class="w-5 h-5"></i>
                                  </a>
                                  <a href="stalker.php" class="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 border border-white/5 <?= $current_page == 'stalker.php' ? 'bg-purple-600/20 text-purple-400 ring-1 ring-purple-500/50' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 hover:text-white' ?>" title="Wi-Fi Stalker">
                                     <i data-lucide="radar" class="w-5 h-5"></i>

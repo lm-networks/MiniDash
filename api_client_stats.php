@@ -1,5 +1,9 @@
 <?php
 /** Created by Łukasz Misiura (c) 2025 | dev.lm-ads.com **/
+/**
+ * Transfer jednego urządzenia: dzień / tydzień / miesiąc.
+ * Liczony jako suma dodatnich różnic licznika (patrz transfer_window()).
+ */
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/functions.php';
@@ -18,29 +22,14 @@ if (!$mac) {
     exit;
 }
 
-$stats_24h = ['rx' => 0, 'tx' => 0, 'total' => 0];
-$stats_7d = ['rx' => 0, 'tx' => 0, 'total' => 0];
+$empty = ['rx' => 0, 'tx' => 0, 'total' => 0];
+$out = ['mac' => $mac, 'stats_24h' => $empty, 'stats_7d' => $empty, 'stats_30d' => $empty];
 
-if (isset($db)) {
-    // 24h from SQLite client_history
-    $stmt = $db->prepare("SELECT SUM(rx_bytes) as rx, SUM(tx_bytes) as tx FROM client_history WHERE mac = ? AND seen_at >= datetime('now', '-1 day')");
-    $stmt->execute([$mac]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($row) {
-        $stats_24h = ['rx' => (int)($row['rx'] ?? 0), 'tx' => (int)($row['tx'] ?? 0), 'total' => (int)(($row['rx'] ?? 0) + ($row['tx'] ?? 0))];
-    }
-
-    // 7d from SQLite
-    $stmt = $db->prepare("SELECT SUM(rx_bytes) as rx, SUM(tx_bytes) as tx FROM client_history WHERE mac = ? AND seen_at >= datetime('now', '-7 days')");
-    $stmt->execute([$mac]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($row) {
-        $stats_7d = ['rx' => (int)($row['rx'] ?? 0), 'tx' => (int)($row['tx'] ?? 0), 'total' => (int)(($row['rx'] ?? 0) + ($row['tx'] ?? 0))];
+if (isset($db) && $db instanceof PDO) {
+    foreach (['stats_24h' => '-1 day', 'stats_7d' => '-7 days', 'stats_30d' => '-30 days'] as $key => $since) {
+        $one = transfer_window($db, $since, 'mac', $mac);
+        if (isset($one[$mac])) $out[$key] = $one[$mac];
     }
 }
 
-echo json_encode([
-    'mac' => $mac,
-    'stats_24h' => $stats_24h,
-    'stats_7d' => $stats_7d
-]);
+echo json_encode($out);
