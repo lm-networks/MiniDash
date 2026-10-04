@@ -58,7 +58,7 @@ $navbar_stats = get_navbar_stats();
                     <div class="p-2 bg-slate-800 rounded-lg text-slate-400">
                         <i data-lucide="server" class="w-4 h-4"></i>
                     </div>
-                    <span class="font-mono text-sm text-slate-300">Live API Data</span>
+                    <span class="font-mono text-sm text-slate-300">Dziennik zdarzeń</span>
                     <span id="loadStatus" class="text-xs text-slate-600"></span>
                 </div>
                 <!-- Pagination Controls Top -->
