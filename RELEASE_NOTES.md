@@ -1,5 +1,24 @@
 # MiniDash — Release Notes
 
+## v2.7.0 (2026-10-04)
+
+Transfer per urządzenie i VLAN, inwentarz urządzeń, naprawa strony logów.
+
+### Transfer (`transfer.php`)
+- Nowa strona: ranking urządzeń i rozbicie per VLAN, z zakresem dzień / tydzień / miesiąc
+- Transfer liczony jako suma dodatnich różnic licznika (`transfer_window()`). `rx_bytes`/`tx_bytes` w `client_history` to liczniki skumulowane od połączenia klienta - dotychczasowe sumowanie wprost zawyżało wynik wielokrotnie (np. 474 GB zamiast realnych ~15 GB)
+- Modale urządzenia (dashboard i Zasoby) pokazują teraz dzień / tydzień / miesiąc zamiast 24h / 7d / „total", też liczone deltami
+
+### Inwentarz (`inventory.php`)
+- Nowa strona: wszystkie widziane urządzenia (z `known_macs.json` + klienci na żywo), z właścicielem i notatką do edycji oraz zatwierdzaniem
+- Urządzenie niezatwierdzone = NOWE - widać sprzęt, który pojawił się bez wiedzy admina; przycisk „Zatwierdź wszystkie" na baseline
+- Dane człowieka w tabeli `device_inventory` (migracja 006), zapis przez `api_inventory.php` z tokenem CSRF
+
+### Logi (`logs.php`)
+- Naprawione puste logi: UniFi Network 10.6 nie udostępnia już zdarzeń kluczem API (`stat/event` 404, `rest/alarm` 400). Strona czyta teraz lokalną tabelę `events` (to samo źródło co dzwonek): zakładka zdarzeń = wszystko, zakładka alarmów = CRITICAL/WARNING
+
+---
+
 ## v2.6.0 (2026-10-03)
 
 Kontrola dostępu i reguły firewalla z poziomu MiniDash, edytor dashboardu, mapa sieci i sesje logowania.
