@@ -225,7 +225,7 @@ $rule_list = $security_settings['rule_list'] ?? [];
                                 <i data-lucide="shield-alert" class="w-5 h-5 text-blue-400"></i>
                                 <span class="text-xs font-black text-slate-500 uppercase tracking-widest"><?= __('threats.protocol') ?> IPS</span>
                             </div>
-                            <p class="text-lg font-bold text-white capitalize"><?= htmlspecialchars($ips_mode) ?></p>
+                            <p class="text-lg font-bold text-white uppercase"><?= htmlspecialchars($ips_mode) ?></p>
                         </div>
                         <div class="bg-slate-800/50 border border-white/5 rounded-2xl p-5">
                             <div class="flex items-center gap-3 mb-2">

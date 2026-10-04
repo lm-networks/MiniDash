@@ -1067,6 +1067,27 @@ function get_unifi_security_settings() {
 
     $geoblocking_enabled = !empty($blocked_by_country);
 
+    // UniFi 10.x: stare endpointy bywają puste/404. Jeśli nie ma reguł z rest/firewallrule,
+    // bierzemy realne reguły z firewall-policies (to samo źródło co strona Firewall).
+    if (empty($rule_list)) {
+        $fw = get_firewall_view();
+        foreach ($fw['rules'] ?? [] as $r) {
+            $rule_list[] = [
+                'id'       => $r['id'] ?? 'N/A',
+                'name'     => ($r['name'] ?? '') !== '' ? $r['name'] : 'Firewall Policy',
+                'category' => trim(($r['src_zone'] ?? '') . ' → ' . ($r['dst_zone'] ?? ''), ' →'),
+                'priority' => ($r['action'] ?? '') === 'BLOCK' ? 'HIGH' : 'MEDIUM',
+                'action'   => $r['action'] ?? 'ALLOW',
+                'status'   => !empty($r['enabled']) ? 'Aktywna' : 'Nieaktywna',
+            ];
+        }
+    }
+    // Zablokowane zagrożenia: rest/alarm na 10.x nie działa - liczymy z v2 traffic-flows (24h).
+    if ((int)$threats_count === 0) {
+        $tev = fetch_threat_events('24h')['events'] ?? [];
+        $threats_count = count(array_filter($tev, fn($e) => ($e['action'] ?? '') === 'blocked'));
+    }
+
     $ips_config = $ips_resp['data'][0] ?? [];
     $settings = [
         'ips_enabled' => isset($ips_config['ips_mode']) && $ips_config['ips_mode'] !== 'disabled',
