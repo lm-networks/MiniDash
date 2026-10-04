@@ -71,7 +71,12 @@ $h = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES);
                                 <span class="inline-block w-2.5 h-2.5 rounded-full <?= $d['online'] ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,.5)]' : 'bg-slate-700' ?>" title="<?= $d['online'] ? 'online' : 'offline' ?>"></span>
                             </td>
                             <td class="px-4 py-3">
-                                <div class="font-bold text-white"><?= $h($d['name']) ?></div>
+                                <div class="font-bold text-white flex items-center gap-2">
+                                    <span><?= $h($d['name']) ?></span>
+                                    <?php if ($d['random']): ?>
+                                    <span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-400 border border-white/5" title="<?= $h(__('inventory.random_mac_hint')) ?>"><?= __('inventory.random_mac') ?></span>
+                                    <?php endif; ?>
+                                </div>
                                 <div class="font-mono text-[10px] text-slate-600"><?= $h($d['mac_raw']) ?><?= $d['online'] && $d['ip'] ? ' · ' . $h($d['ip']) : '' ?></div>
                             </td>
                             <td class="px-4 py-3">

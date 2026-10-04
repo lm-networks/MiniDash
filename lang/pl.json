@@ -823,6 +823,8 @@
         "empty": "Brak urządzeń",
         "saved": "Zapisano",
         "error": "Błąd",
-        "confirm_all": "Zatwierdzić wszystkie obecnie widziane urządzenia?"
+        "confirm_all": "Zatwierdzić wszystkie obecnie widziane urządzenia?",
+        "random_mac": "losowy MAC",
+        "random_mac_hint": "Adres lokalnie administrowany - telefon z randomizacją MAC. Zmienia się, nie jest trwałym urządzeniem."
     }
 }

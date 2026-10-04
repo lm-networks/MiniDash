@@ -823,6 +823,8 @@
         "empty": "No devices",
         "saved": "Saved",
         "error": "Error",
-        "confirm_all": "Approve all currently seen devices?"
+        "confirm_all": "Approve all currently seen devices?",
+        "random_mac": "random MAC",
+        "random_mac_hint": "Locally-administered address - a phone with MAC randomization. It changes, not a permanent device."
     }
 }

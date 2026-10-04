@@ -2526,6 +2526,17 @@ function transfer_window(PDO $db, string $since, string $group = 'mac', string $
 }
 
 /**
+ * Czy MAC jest lokalnie administrowany (wylosowany przez urządzenie).
+ * Bit 0x02 w pierwszym oktecie = adres prywatny/losowy - telefony z randomizacją MAC.
+ */
+function is_random_mac(string $mac): bool
+{
+    $hex = normalize_mac($mac);
+    if (strlen($hex) < 2) return false;
+    return (hexdec(substr($hex, 0, 2)) & 0x02) !== 0;
+}
+
+/**
  * Inwentarz urządzeń: scala known_macs.json (nazwa + pierwsze widzenie),
  * tabelę device_inventory (właściciel, notatka, zatwierdzenie) i - o ile dostępni -
  * klientów na żywo (status online, IP, VLAN). Klucz = MAC znormalizowany.
@@ -2589,6 +2600,7 @@ function get_inventory(PDO $db, bool $with_live = true): array
             'online'      => $l !== null,
             'ip'          => $l['ip'] ?? '',
             'vlan'        => $l['vlan'] ?? null,
+            'random'      => is_random_mac($m),
         ];
     }
     // Niezatwierdzone najpierw, potem po nazwie.
