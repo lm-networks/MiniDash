@@ -64,16 +64,8 @@ $ips_mode_labels = [
 ];
 $ips_mode_label = $ips_mode_labels[$ips_mode] ?? $ips_mode;
 
-// Security score
-$security_score = 100;
-if (!$ips_enabled) $security_score -= 20;
-if ($active_rules < 2) $security_score -= 15;
-elseif ($active_rules < 10) $security_score -= 8;
-if (!$threat_detection_enabled) $security_score -= 15;
-if (!$monitoring_active) $security_score -= 10;
-if (!$ad_blocking && !$honeypot) $security_score -= 10;
-elseif ($ad_blocking && $honeypot) $security_score = min(100, $security_score + 5);
-$security_score = max(0, min(100, $security_score));
+// Security score — wspólny helper (to samo liczy kafelek na dashboardzie)
+$security_score = compute_security_score($security_settings);
 
 $stats = [
     'threats_blocked' => $threats_blocked,
@@ -171,7 +163,7 @@ $rule_list = $security_settings['rule_list'] ?? [];
 
                 <div class="glass-card p-6 stat-glow-emerald cursor-pointer hover:scale-[1.02] transition-transform relative overflow-hidden flex flex-col items-center justify-center min-h-[220px]" onclick="openSecurityScoreModal()">
                     <div class="relative w-32 h-32 flex items-center justify-center mb-4">
-                        <svg class="w-full h-full -rotate-90">
+                        <svg class="w-full h-full -rotate-90" viewBox="0 0 128 128" preserveAspectRatio="xMidYMid meet">
                             <circle cx="64" cy="64" r="58" stroke="currentColor" stroke-width="8" fill="transparent" class="text-white/5"></circle>
                             <circle cx="64" cy="64" r="58" stroke="currentColor" stroke-width="10" fill="transparent" class="<?= $security_score >= 80 ? 'text-emerald-500' : 'text-rose-500' ?> transition-all duration-1000 ease-out" stroke-dasharray="364.4" stroke-dashoffset="<?= 364.4 - (364.4 * $security_score / 100) ?>" stroke-linecap="round"></circle>
                         </svg>

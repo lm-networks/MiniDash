@@ -2526,6 +2526,26 @@ function transfer_window(PDO $db, string $since, string $group = 'mac', string $
 }
 
 /**
+ * Ocena bezpieczeństwa 0-100 z ustawień UniFi (get_unifi_security_settings()).
+ * Jedno źródło prawdy dla security.php i kafelka na dashboardzie.
+ */
+function compute_security_score(array $s): int
+{
+    $score = 100;
+    if (empty($s['ips_enabled'])) $score -= 20;
+    $rules = (int)($s['total_rules_count'] ?? 0);
+    if ($rules < 2) $score -= 15;
+    elseif ($rules < 10) $score -= 8;
+    if (empty($s['threat_detection_enabled'])) $score -= 15;
+    if (empty($s['monitoring_active'])) $score -= 10;
+    $ad = !empty($s['ad_blocking_enabled']);
+    $hp = !empty($s['honeypot_enabled']);
+    if (!$ad && !$hp) $score -= 10;
+    elseif ($ad && $hp) $score = min(100, $score + 5);
+    return max(0, min(100, $score));
+}
+
+/**
  * Czy MAC jest lokalnie administrowany (wylosowany przez urządzenie).
  * Bit 0x02 w pierwszym oktecie = adres prywatny/losowy - telefony z randomizacją MAC.
  */

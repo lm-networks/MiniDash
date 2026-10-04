@@ -119,7 +119,11 @@
         "sum_in": "SUM IN",
         "sum_out": "SUM OUT",
         "refresh_data": "Refresh data",
-        "wifi_stalker_widget_loading": "Loading..."
+        "wifi_stalker_widget_loading": "Loading...",
+        "fw_blocked": "Blocked (firewall)",
+        "last_24h_short": "24h",
+        "blocked_by_isp": "By ISP",
+        "no_blocks": "No blocked connections"
     },
     "modals": {
         "ping_details_title": "Latency Details (Ping)",
@@ -783,7 +787,9 @@
         "w_vlan": "VLAN segmentation",
         "w_top_talkers": "Top talkers",
         "w_access": "Access control",
-        "w_access_bar": "Quick toggles bar (Access control)"
+        "w_access_bar": "Quick toggles bar (Access control)",
+        "w_security_score": "Security score",
+        "w_fw_blocked": "Blocked (firewall)"
     },
     "netmap": {
         "view_list": "List",

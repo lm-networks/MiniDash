@@ -119,7 +119,11 @@
         "sum_in": "SUMA IN",
         "sum_out": "SUMA OUT",
         "refresh_data": "Odśwież dane",
-        "wifi_stalker_widget_loading": "Ladowanie..."
+        "wifi_stalker_widget_loading": "Ladowanie...",
+        "fw_blocked": "Zablokowane (firewall)",
+        "last_24h_short": "24h",
+        "blocked_by_isp": "Wg ISP",
+        "no_blocks": "Brak zablokowanych połączeń"
     },
     "modals": {
         "ping_details_title": "Szczegóły Opóźnień (Ping)",
@@ -783,7 +787,9 @@
         "w_vlan": "Segmentacja VLAN",
         "w_top_talkers": "Najwięksi konsumenci",
         "w_access": "Kontrola dostępu",
-        "w_access_bar": "Pasek przełączników (Kontrola dostępu)"
+        "w_access_bar": "Pasek przełączników (Kontrola dostępu)",
+        "w_security_score": "Ocena bezpieczeństwa",
+        "w_fw_blocked": "Zablokowane (firewall)"
     },
     "netmap": {
         "view_list": "Lista",

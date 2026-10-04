@@ -624,6 +624,35 @@ require_once __DIR__ . '/includes/network_map.php'; ?>
 
                 <div class="mt-3 text-[10px] text-slate-600 font-bold uppercase tracking-widest text-center"><?= __('dashboard.network_latency') ?></div>
             </div>
+
+            <?php dw_end(); dw_start('security_score', 1, 'auto'); ?>
+            <!-- Ocena bezpieczeństwa (pierścień, dane z api_security_summary) -->
+            <div class="glass-card p-6 stat-glow-emerald cursor-pointer hover:scale-[1.02] transition-transform flex flex-col items-center justify-center" onclick="location.href='security.php'" title="<?= __('security.click_for_details') ?>">
+                <div class="relative w-28 h-28 flex items-center justify-center mb-3">
+                    <svg class="w-full h-full -rotate-90" viewBox="0 0 128 128" preserveAspectRatio="xMidYMid meet">
+                        <circle cx="64" cy="64" r="58" stroke="currentColor" stroke-width="8" fill="transparent" class="text-white/5"></circle>
+                        <circle id="secScoreRing" cx="64" cy="64" r="58" stroke="currentColor" stroke-width="10" fill="transparent" class="text-slate-700 transition-all duration-1000 ease-out" stroke-dasharray="364.4" stroke-dashoffset="364.4" stroke-linecap="round"></circle>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span id="secScoreVal" class="text-4xl font-black text-white leading-none">--</span>
+                        <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Score</span>
+                    </div>
+                </div>
+                <p class="text-[12px] font-black text-slate-400 uppercase tracking-widest text-center"><?= __('security.security_score') ?></p>
+            </div>
+
+            <?php dw_end(); dw_start('fw_blocked', 1, 'auto'); ?>
+            <!-- Zablokowane połączenia (firewall/IPS, 24h) — klik otwiera rozbicie per ISP -->
+            <div class="glass-card p-6 stat-glow-rose cursor-pointer group hover:scale-[1.02] transition-all" onclick="openBlockedModal()">
+                <div class="flex justify-between items-center mb-5">
+                    <div class="p-3 bg-rose-500/10 rounded-xl text-rose-400 group-hover:bg-rose-500/20 transition-colors">
+                        <i data-lucide="shield-x" class="w-6 h-6"></i>
+                    </div>
+                    <span class="text-xs font-black text-slate-500 uppercase tracking-[0.2em]"><?= __('dashboard.last_24h_short') ?></span>
+                </div>
+                <div id="fwBlockedVal" class="text-4xl font-black tracking-tighter text-white">--</div>
+                <div class="text-slate-500 text-xs mt-1 font-black uppercase tracking-widest italic"><?= __('dashboard.fw_blocked') ?></div>
+            </div>
             <?php dw_end(); dw_start('wan_chart', 3, 2); ?>
             <!-- WAN Status & Live Chart -->
             <div class="glass-card p-8 flex flex-col">
@@ -1305,9 +1334,83 @@ require_once __DIR__ . '/includes/network_map.php'; ?>
         </div>
     </div>
 
+    <!-- Modal: zablokowane połączenia wg ISP -->
+    <div id="blockedModal" class="modal-overlay" onclick="if(event.target===this) closeBlockedModal()">
+        <div class="modal-container max-w-lg p-0 overflow-hidden" onclick="event.stopPropagation()">
+            <div class="p-6 border-b border-white/10 flex justify-between items-center">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-rose-500/10 rounded-xl text-rose-400"><i data-lucide="shield-x" class="w-6 h-6"></i></div>
+                    <div>
+                        <h2 class="text-xl font-black text-white"><?= __('dashboard.fw_blocked') ?></h2>
+                        <p class="text-[12px] text-slate-500 uppercase tracking-widest font-bold"><?= __('dashboard.blocked_by_isp') ?> · <?= __('dashboard.last_24h_short') ?></p>
+                    </div>
+                </div>
+                <button onclick="closeBlockedModal()" class="p-2 text-slate-500 hover:text-white transition bg-white/5 rounded-xl border border-white/5"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="max-h-[60vh] overflow-y-auto p-6 custom-scrollbar" id="blockedByIsp">
+                <p class="text-slate-500 text-sm text-center py-6"><?= __('transfer.loading') ?></p>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Init Lucide Icons
         lucide.createIcons();
+
+        // ─── Kafelki bezpieczeństwa: ocena + zablokowane (api_security_summary) ───
+        let blockedOrgs = [];
+        function renderSecuritySummary(d) {
+            // Ocena bezpieczeństwa — pierścień + liczba
+            const val = document.getElementById('secScoreVal');
+            const ring = document.getElementById('secScoreRing');
+            if (val && typeof d.score === 'number') {
+                val.innerText = d.score;
+                if (ring) {
+                    const C = 364.4;
+                    ring.style.strokeDashoffset = (C - C * d.score / 100).toFixed(1);
+                    ring.classList.remove('text-slate-700');
+                    ring.classList.add(d.score >= 80 ? 'text-emerald-500' : (d.score >= 50 ? 'text-amber-500' : 'text-rose-500'));
+                }
+            }
+            // Zablokowane
+            const b = document.getElementById('fwBlockedVal');
+            if (b) b.innerText = (d.blocked ?? 0).toLocaleString('pl-PL');
+            blockedOrgs = d.top_orgs || [];
+        }
+
+        function renderBlockedModal() {
+            const box = document.getElementById('blockedByIsp');
+            if (!blockedOrgs.length) {
+                box.innerHTML = '<p class="text-slate-500 text-sm text-center py-6 italic"><?= __('dashboard.no_blocks') ?></p>';
+                return;
+            }
+            const max = blockedOrgs[0].count || 1;
+            box.innerHTML = blockedOrgs.map(o => {
+                const name = (o.org || '?').replace(/</g, '&lt;');
+                const flag = o.cc && o.cc !== 'un' ? `<img src="https://flagcdn.com/20x15/${o.cc}.png" class="w-4 h-3 rounded-sm inline-block" alt="${o.cc}">` : '';
+                return `<div class="mb-3">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-sm font-bold text-white flex items-center gap-2">${flag}${name}</span>
+                        <span class="font-mono text-xs text-rose-300">${o.count}</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-slate-800 overflow-hidden"><div class="h-full bg-rose-500/70" style="width:${Math.max(3, o.count / max * 100)}%"></div></div>
+                </div>`;
+            }).join('');
+        }
+
+        window.openBlockedModal = function () {
+            renderBlockedModal();
+            document.getElementById('blockedModal').classList.add('active');
+            lucide.createIcons();
+        };
+        window.closeBlockedModal = function () {
+            document.getElementById('blockedModal').classList.remove('active');
+        };
+
+        fetch('api_security_summary.php')
+            .then(r => r.json())
+            .then(d => { if (d.success) renderSecuritySummary(d); })
+            .catch(() => {});
 
         // WAN Chart Logic - wrapped in try-catch to prevent blocking other scripts
         let wanChart = null;
