@@ -1082,6 +1082,28 @@ function get_unifi_security_settings() {
             ];
         }
     }
+
+    // Blokada regionów (UniFi: Settings → Security → Region Blocking) siedzi w usg_geo.
+    $usg_geo = [];
+    foreach ((fetch_api("/proxy/network/api/s/$site_to_use_trad/rest/setting/usg_geo")['data'] ?? []) as $g) {
+        if (($g['key'] ?? '') === 'usg_geo') { $usg_geo = $g['ip_filtering'] ?? []; break; }
+    }
+    $geo_block_enabled = !empty($usg_geo['enabled']);
+    $geo_block_action  = $usg_geo['action'] ?? 'block';
+    $geo_block_dir     = $usg_geo['traffic_direction'] ?? 'ingress';
+    $geo_block_countries = array_values(array_filter(array_map('strtolower',
+        explode(',', (string)($usg_geo['countries'] ?? '')))));
+    if ($geo_block_enabled && $geo_block_countries) {
+        $dirmap = ['ingress' => 'in', 'egress' => 'out', 'both' => 'both'];
+        $geo_countries = $geo_block_countries;
+        $geo_rules = [[
+            'countries' => $geo_block_countries,
+            'counts'    => [],
+            'direction' => $dirmap[$geo_block_dir] ?? 'in',
+            'action'    => strtoupper($geo_block_action),
+            'name'      => 'Region Blocking',
+        ]];
+    }
     // Zablokowane zagrożenia: rest/alarm na 10.x nie działa - liczymy z v2 traffic-flows (24h).
     if ((int)$threats_count === 0) {
         $tev = fetch_threat_events('24h')['events'] ?? [];
@@ -1098,8 +1120,10 @@ function get_unifi_security_settings() {
         'total_rules_count' => count($rule_list),
         'rule_list' => $rule_list,
         'threats_count' => $threats_count,
-        'geoblocking_enabled' => $geoblocking_enabled || !empty($ips_config['geoblock_enabled']) || !empty($ips_config['country_block_enabled']),
-        'blocked_countries' => $geo_countries,
+        'geoblocking_enabled' => $geo_block_enabled || $geoblocking_enabled || !empty($ips_config['geoblock_enabled']) || !empty($ips_config['country_block_enabled']),
+        'geo_block_action' => $geo_block_action,
+        'geo_block_direction' => $geo_block_dir,
+        'blocked_countries' => $geo_block_enabled ? $geo_block_countries : $geo_countries,
         'geo_rules' => $geo_rules,
         'monitoring_active' => true,
         'vpn_secure' => $vpn_active,
@@ -1765,11 +1789,18 @@ function get_firewall_view(): array
         $sz = $p['source']['zone_id'] ?? '';
         $dz = $p['destination']['zone_id'] ?? '';
         $proto = strtolower((string)($p['protocol'] ?? 'all'));
+        // Filtr krajów (UniFi 10.x): reguła, w której źródło/cel to REGION.
+        $regions = [];
+        $region_side = '';
+        if (($p['source']['matching_target'] ?? '') === 'REGION') { $regions = (array)($p['source']['regions'] ?? []); $region_side = 'in'; }
+        elseif (($p['destination']['matching_target'] ?? '') === 'REGION') { $regions = (array)($p['destination']['regions'] ?? []); $region_side = 'out'; }
         $rules[] = [
             'id'         => $p['_id'],
             'name'       => trim((string)($p['name'] ?? '')),
             'action'     => strtoupper((string)($p['action'] ?? '')),
             'enabled'    => !empty($p['enabled']),
+            'regions'    => array_map('strtoupper', $regions),
+            'region_side'=> $region_side,
             'user'       => empty($p['predefined']),
             'index'      => (int)($p['index'] ?? 0),
             'src_zone'   => $zones[$sz] ?? '?',
