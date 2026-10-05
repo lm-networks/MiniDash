@@ -78,7 +78,7 @@ Built with PHP 8.x, SQLite, Tailwind CSS and vanilla JavaScript. No frameworks, 
 ## Quick Start (Docker)
 
 ```bash
-git clone https://github.com/sq9lm/MiniDash.git
+git clone https://github.com/lm-networks/MiniDash.git
 cd MiniDash
 docker-compose up -d
 ```

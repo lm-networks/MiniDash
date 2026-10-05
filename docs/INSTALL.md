@@ -23,7 +23,7 @@ The fastest way to get MiniDash running. Works on any Docker host (Linux, Synolo
 ### Step 1: Clone the repository
 
 ```bash
-git clone https://github.com/sq9lm/MiniDash.git
+git clone https://github.com/lm-networks/MiniDash.git
 cd MiniDash
 ```
 
@@ -197,7 +197,7 @@ dnf install php82-php-fpm php82-php-pdo php82-php-sodium php82-php-curl nginx gi
 
 ```bash
 cd /var/www
-git clone https://github.com/sq9lm/MiniDash.git minidash
+git clone https://github.com/lm-networks/MiniDash.git minidash
 cd minidash
 
 chown -R www-data:www-data data/ logs/
@@ -289,7 +289,7 @@ a2enmod rewrite
 
 ```bash
 cd /var/www
-git clone https://github.com/sq9lm/MiniDash.git minidash
+git clone https://github.com/lm-networks/MiniDash.git minidash
 cd minidash
 
 chown -R www-data:www-data data/ logs/

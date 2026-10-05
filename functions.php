@@ -17,7 +17,7 @@ function check_for_update(): ?string {
     }
 
     $ctx = stream_context_create(['http' => ['timeout' => 5, 'header' => "User-Agent: MiniDash\r\n"]]);
-    $json = @file_get_contents('https://raw.githubusercontent.com/sq9lm/MiniDash/master/version.json', false, $ctx);
+    $json = @file_get_contents('https://raw.githubusercontent.com/lm-networks/MiniDash/master/version.json', false, $ctx);
     $remote = null;
     if ($json) {
         $data = json_decode($json, true);
@@ -3397,7 +3397,7 @@ function render_nav($title = "MiniDash", $stats = []) {
             <div class="flex items-center gap-3 text-white text-sm font-medium">
                 <i data-lucide="download" class="w-4 h-4"></i>
                 <span><?= __('common.update_available') ?? 'Update available' ?>: <strong>v<?= htmlspecialchars($new_version) ?></strong> (current: v<?= MINIDASH_VERSION ?>)</span>
-                <a href="https://github.com/sq9lm/MiniDash" target="_blank" class="ml-2 underline underline-offset-2 hover:text-amber-200 transition">GitHub</a>
+                <a href="https://github.com/lm-networks/MiniDash" target="_blank" class="ml-2 underline underline-offset-2 hover:text-amber-200 transition">GitHub</a>
             </div>
             <button onclick="document.getElementById('update-banner').remove()" class="text-white/70 hover:text-white transition p-1">
                 <i data-lucide="x" class="w-4 h-4"></i>
