@@ -4,6 +4,8 @@ _old/
 KOPIA/
 node_modules/
 data/minidash.db
+data/.env
+data/.installed
 data/.encryption_key
 data/config.json
 data/known_macs.json

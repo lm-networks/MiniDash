@@ -1,13 +1,14 @@
 <?php
 /** Created by Łukasz Misiura (c) 2025 | dev.lm-ads.com **/
-define('MINIDASH_VERSION', '2.8.0');
+define('MINIDASH_VERSION', '2.8.1');
 error_reporting(E_ALL & ~E_NOTICE);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/logs/php_errors.log');
 
-// Load .env file
-$envFile = __DIR__ . '/.env';
+// Load .env file. Kreator zapisuje konfigurację do data/.env (w Dockerze data/ to wolumen,
+// więc przetrwa przebudowę kontenera); .env w katalogu głównym = starsze instalacje.
+$envFile = file_exists(__DIR__ . '/data/.env') ? __DIR__ . '/data/.env' : __DIR__ . '/.env';
 if (file_exists($envFile)) {
     $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {

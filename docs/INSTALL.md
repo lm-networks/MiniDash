@@ -2,16 +2,17 @@
 
 ## Requirements
 
-- **PHP 8.1+** with extensions: `pdo_sqlite`, `curl`, `sodium`
+- **PHP 8.1+** with extensions: `pdo_sqlite`, `curl`, `sodium` (sodium is built into PHP in most distributions - check with `php -m`)
 - **Web server**: nginx, Apache, or Synology Web Station
 - **UniFi Controller** with API key (UniFi OS 3.x+ / Network 8.x+)
+- **Background jobs** run every minute - built into the Docker image, set up with cron for other installs (see [Background jobs](#background-jobs-required-without-docker))
 
 ### Getting a UniFi API Key
 
 1. Log into your UniFi Controller
 2. Go to **Settings > Admins & Users > API Keys**
 3. Click **Create API Key**
-4. Set permissions to **Read-Only** (recommended)
+4. Choose permissions: **Read-Only** is enough for monitoring. Toggling access-control objects and firewall rules from MiniDash needs a key with write access
 5. Copy the key — you'll need it during setup
 
 ---
@@ -30,8 +31,10 @@ cd MiniDash
 ### Step 2: Build and start
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
+
+(Older Docker installations use `docker-compose up -d` instead.)
 
 ### Step 3: Setup Wizard
 
@@ -51,11 +54,22 @@ The **Setup Wizard** will appear automatically on first run. Fill in:
 
 Click **Save & Continue** — done!
 
-To change the port, create a `.env` file before starting:
+The configuration is saved in the `data` volume, so it survives container rebuilds and updates. The container also runs the background jobs (alerts, daily report, WAN and client statistics) by itself - no cron needed.
+
+To change the port, create a `.env` file next to `docker-compose.yml` before starting:
 
 ```bash
 echo "MINIDASH_PORT=3000" > .env
-docker-compose up -d
+docker compose up -d
+```
+
+**Optional: skip the Setup Wizard.** Put your settings in the same `.env` file before the first start. `UNIFI_API_KEY` and `ADMIN_PASSWORD` (at least 6 characters) are required; they are used only on the first start:
+
+```bash
+UNIFI_CONTROLLER_URL=https://192.168.1.1
+UNIFI_API_KEY=your-api-key
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=choose-a-strong-password
 ```
 
 ### Updating
@@ -63,10 +77,12 @@ docker-compose up -d
 ```bash
 cd MiniDash
 git pull
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
-Data and logs are stored in Docker volumes and persist across updates.
+Configuration, data and logs are stored in Docker volumes and persist across updates.
+
+> **Updating from a version older than 2.8.1:** older versions kept the configuration inside the container, so it is lost when the container is rebuilt. After this one update the Setup Wizard appears again - enter your settings once; from then on they are kept in the `data` volume.
 
 ---
 
@@ -114,9 +130,11 @@ The **Setup Wizard** will guide you through the configuration — fill in your U
 
 ### Notes
 
-- Data (SQLite database, avatars) and logs are stored in Docker volumes — they survive container rebuilds
+- Configuration, data (SQLite database, avatars) and logs are stored in Docker volumes - they survive container rebuilds
+- Background jobs (alerts, daily report, WAN and client statistics) run inside the container - no Task Scheduler entry needed
 - To change the port, create `.env` with `MINIDASH_PORT=3000` and rebuild
 - Container includes `bash` and `mc` (Midnight Commander) for terminal access
+- If you copy the project from a Windows PC, that's fine - the image fixes Windows line endings in the start script
 
 ---
 
@@ -155,19 +173,22 @@ chown -R http:http /volume1/web/minidash/logs
    - Document root: `/volume1/web/minidash`
    - PHP version: **PHP 8.2**
 
-**Option B: Reverse Proxy (with existing domain)**
+**Option B: Reverse Proxy (HTTPS on your own hostname)**
 
-1. In **Control Panel > Login Portal > Advanced > Reverse Proxy**
-2. Create a new rule:
-   - Source: `https://yourdomain.com/minidash`
-   - Destination: `http://localhost:80` (where Web Station serves the files)
+DSM's reverse proxy matches on hostname and port only (no paths like `/minidash`), so give MiniDash its own hostname:
+
+1. Create the portal from Option A on a free local port, e.g. `8081`
+2. In **Control Panel > Login Portal > Advanced > Reverse Proxy**, create a rule:
+   - Source: `HTTPS`, hostname `unifi.yourdomain.com`, port `443`
+   - Destination: `HTTP`, `localhost`, port `8081`
+3. Assign a certificate for `unifi.yourdomain.com` in **Control Panel > Security > Certificate**
 
 > **Security check (required after install).** MiniDash ships a root `.htaccess` that blocks
 > `.env` (UniFi API key, admin password), `.git/` and `data/.encryption_key`. Apache honours it only
 > with `AllowOverride All`. Verify from outside your network - every line must print `403`:
 >
 > ```bash
-> for p in .env .git/config data/.encryption_key data/config.json; do
+> for p in .env .git/config data/.env data/.encryption_key data/config.json; do
 >   curl -s -o /dev/null -w "$p %{http_code}\n" https://unifi.yourdomain.com/$p
 > done
 > ```
@@ -176,21 +197,38 @@ chown -R http:http /volume1/web/minidash/logs
 
 Navigate to your configured hostname or IP. The **Setup Wizard** will appear — fill in your configuration and you're ready to go.
 
+### Step 6: Background jobs
+
+Without them there are no alerts, no daily report and no WAN/transfer history. In **Control Panel > Task Scheduler**, create two **Scheduled Tasks > User-defined script**, user `root`, repeat **every minute**:
+
+```bash
+# Task 1: alerts and daily report
+/usr/local/bin/php82 /volume1/web/minidash/cron_triggers.php >/dev/null 2>&1
+
+# Task 2: WAN and client statistics (offset by 30 s so the two jobs don't hit the database at once)
+sleep 30; /usr/local/bin/php82 /volume1/web/minidash/update_wan.php >/dev/null 2>&1
+```
+
 ---
 
 ## Option 4: Any Linux Server (nginx + PHP-FPM)
 
 ### Step 1: Install dependencies
 
-**Ubuntu/Debian:**
+**Debian 12+ / Ubuntu 22.04+:**
 ```bash
 apt update
-apt install php8.2-fpm php8.2-sqlite3 php8.2-curl php8.2-sodium nginx git
+apt install php-fpm php-sqlite3 php-curl nginx git
+php -m | grep -E 'pdo_sqlite|curl|sodium'   # all three must be listed
 ```
 
-**CentOS/RHEL:**
+This installs your distribution's PHP (8.1 or newer); `sodium` is built in. Note the PHP version (`php -v`) - you need it for the PHP-FPM socket path in Step 3.
+
+**RHEL/Rocky/Alma 9:**
 ```bash
-dnf install php82-php-fpm php82-php-pdo php82-php-sodium php82-php-curl nginx git
+dnf module enable php:8.2   # the default PHP on RHEL 9 is 8.0, MiniDash needs 8.1+
+dnf install php-fpm php-pdo php-sodium nginx git
+php -m | grep -E 'pdo_sqlite|curl|sodium'   # all three must be listed
 ```
 
 ### Step 2: Clone
@@ -247,7 +285,8 @@ server {
         alias /var/www/minidash/data/avatars/;
     }
 
-    # PHP processing
+    # PHP processing (adjust the socket to your PHP version, e.g. php8.3-fpm.sock;
+    # RHEL-family: unix:/run/php-fpm/www.sock)
     location ~ \.php$ {
         fastcgi_pass unix:/run/php/php8.2-fpm.sock;
         fastcgi_index index.php;
@@ -270,9 +309,21 @@ nginx -t
 systemctl restart nginx
 ```
 
+> **Security check (required after install).** Verify from outside your network - every line must print `403`:
+>
+> ```bash
+> for p in .env .git/config data/.env data/.encryption_key data/config.json; do
+>   curl -s -o /dev/null -w "$p %{http_code}\n" https://unifi.yourdomain.com/$p
+> done
+> ```
+
 ### Step 4: Setup Wizard
 
 Navigate to `http://unifi.yourdomain.com` — the Setup Wizard will guide you through the configuration.
+
+### Step 5: Background jobs
+
+Set up the two cron jobs from [Background jobs](#background-jobs-required-without-docker).
 
 ---
 
@@ -281,8 +332,8 @@ Navigate to `http://unifi.yourdomain.com` — the Setup Wizard will guide you th
 ### Step 1: Install dependencies
 
 ```bash
-apt install php8.2 libapache2-mod-php8.2 php8.2-sqlite3 php8.2-curl php8.2-sodium git
-a2enmod rewrite
+apt install apache2 php libapache2-mod-php php-sqlite3 php-curl git
+php -m | grep -E 'pdo_sqlite|curl|sodium'   # all three must be listed
 ```
 
 ### Step 2: Clone
@@ -332,7 +383,7 @@ Create `/etc/apache2/sites-available/minidash.conf`:
 > with `AllowOverride All`. Verify from outside your network - every line must print `403`:
 >
 > ```bash
-> for p in .env .git/config data/.encryption_key data/config.json; do
+> for p in .env .git/config data/.env data/.encryption_key data/config.json; do
 >   curl -s -o /dev/null -w "$p %{http_code}\n" https://unifi.yourdomain.com/$p
 > done
 > ```
@@ -348,6 +399,25 @@ systemctl restart apache2
 
 Navigate to your server address — the Setup Wizard will appear on first visit.
 
+### Step 5: Background jobs
+
+Set up the two cron jobs from [Background jobs](#background-jobs-required-without-docker).
+
+---
+
+## Background jobs (required without Docker)
+
+MiniDash needs two jobs running every minute. Without them there are no alerts, no daily report and no WAN/transfer history. The Docker image runs them by itself; on Synology Web Station use Task Scheduler (Option 3, Step 6). On Linux, add them to the web server user's crontab (`crontab -u www-data -e`):
+
+```cron
+# Alerts and daily report
+* * * * * php /var/www/minidash/cron_triggers.php >/dev/null 2>&1
+# WAN and client statistics, offset by 30 s so the two jobs don't hit the database at once
+* * * * * sleep 30; php /var/www/minidash/update_wan.php >/dev/null 2>&1
+```
+
+Run them as the web server user, not root - files they create in `data/` must stay writable for PHP. Errors go to `logs/php_errors.log`.
+
 ---
 
 ## Post-Installation
@@ -358,11 +428,17 @@ After login, click your avatar (top right) > click the bell icon settings gear. 
 
 ### Configure triggers
 
-In the notification settings modal, scroll to "Smart Triggers" to enable:
+In the notification settings modal, scroll to the alert triggers to enable:
+- Offline tolerance (anti-flapping) - ignore short disconnects such as Wi-Fi roaming
+- Traffic spike alerts
 - New device alerts
 - IPS/IDS blocked attack alerts
 - High latency alerts
-- Speed spike alerts
+- WAN link alerts (link down / back up, failover)
+- Daily report
+- VPN connection alerts
+
+Triggers need the [background jobs](#background-jobs-required-without-docker) to be running.
 
 ### Data retention
 
@@ -389,9 +465,10 @@ chmod 770 data/
 1. Verify the controller URL is correct (include `https://`)
 2. Check that the API key is valid and has read access
 3. If using self-signed certificates (default on UniFi), this is handled automatically
-4. Verify the controller is reachable from the MiniDash server:
+4. Verify the controller is reachable from the MiniDash server (`200` = OK, `401` = wrong API key):
    ```bash
-   curl -k https://192.168.1.1/proxy/network/api/s/default/stat/device
+   curl -k -s -o /dev/null -w "%{http_code}\n" -H "X-API-KEY: your-api-key" \
+     https://192.168.1.1/proxy/network/api/s/default/stat/device
    ```
 
 ### Blank page / PHP errors
@@ -417,7 +494,7 @@ If you get logged out frequently, check:
 
 1. **Use HTTPS** — set up Let's Encrypt or a reverse proxy with SSL
 2. **Restrict access** — use firewall rules to limit access to trusted IPs
-3. **Keep updated** — `git pull && docker-compose up -d --build`
+3. **Keep updated** - `git pull && docker compose up -d --build`; MiniDash shows a banner when a new version is available
 
 ---
 

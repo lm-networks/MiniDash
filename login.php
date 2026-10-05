@@ -13,8 +13,12 @@ require_once 'db.php';
 // Funkcja do weryfikacji logowania
 function verifyLogin($username, $password) {
     global $config;
-    return $username === $config['admin_username'] && 
-           $password === $config['admin_password'];
+    // Puste hasło w konfiguracji = niedokończona instalacja; nigdy nie wpuszczaj pustym hasłem
+    if ((string)($config['admin_password'] ?? '') === '') {
+        return false;
+    }
+    return hash_equals((string)$config['admin_username'], (string)$username) &&
+           hash_equals((string)$config['admin_password'], (string)$password);
 }
 
 // Obsługa formularza logowania

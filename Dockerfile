@@ -33,7 +33,8 @@ RUN chown -R www-data:www-data /var/www/html/data /var/www/html/logs \
 
 # Start script
 COPY docker/start.sh /start.sh
-RUN chmod +x /start.sh
+# sed: pliki sklonowane na Windowsie i wgrane np. na Synology mogą mieć CRLF
+RUN sed -i 's/\r$//' /start.sh && chmod +x /start.sh
 
 EXPOSE 80
 

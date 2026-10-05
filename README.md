@@ -72,6 +72,7 @@ Built with PHP 8.x, SQLite, Tailwind CSS and vanilla JavaScript. No frameworks, 
 - PHP 8.1+ with extensions: `pdo_sqlite`, `curl`, `sodium`
 - Web server (nginx or Apache)
 - UniFi Controller/Gateway with API access (API key)
+- Two background jobs every minute (built into the Docker image; cron for other installs)
 
 ---
 
@@ -80,10 +81,10 @@ Built with PHP 8.x, SQLite, Tailwind CSS and vanilla JavaScript. No frameworks, 
 ```bash
 git clone https://github.com/lm-networks/MiniDash.git
 cd MiniDash
-docker-compose up -d
+docker compose up -d
 ```
 
-Open `http://your-server:8080` — the **Setup Wizard** will guide you through the configuration.
+Open `http://your-server:8080` - the **Setup Wizard** will guide you through the configuration. Configuration and data are kept in Docker volumes, so updates (`git pull && docker compose up -d --build`) keep your settings.
 
 ### Other installation methods
 
@@ -91,6 +92,8 @@ See [docs/INSTALL.md](docs/INSTALL.md) for:
 - Synology NAS (Container Manager or Web Station)
 - Linux server (nginx + PHP-FPM)
 - Apache
+
+Without Docker, set up the [background jobs](docs/INSTALL.md#background-jobs-required-without-docker) - alerts, the daily report and WAN/transfer history depend on them.
 
 ---
 

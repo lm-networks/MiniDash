@@ -1,5 +1,35 @@
 # MiniDash — Release Notes
 
+## v2.8.1 (2026-10-05)
+
+Poprawki instalacji: konfiguracja w Dockerze przetrwa aktualizację, zadania w tle w kontenerze, bezpieczniejsze logowanie, poprawiona instrukcja instalacji.
+
+### Docker
+- Konfiguracja z kreatora zapisywana w `data/.env` (wolumen `data`). Wcześniej `.env` leżał w samym kontenerze i znikał przy przebudowie: po aktualizacji panel startował bez klucza API i z domyślnym loginem `admin`/`admin`
+- Brak zapisanej konfiguracji = kreator (znacznik `data/.installed` jest usuwany), zamiast panelu z domyślnymi danymi
+- `update_wan.php` uruchamiany co minutę w kontenerze, przesunięty o 30 s względem `cron_triggers.php`. Wcześniej historia WAN, transfer i raport dobowy zbierały dane tylko przy otwartym dashboardzie
+- Oba zadania w tle działają jako `www-data`, nie root - pliki w `data/` zostają zapisywalne dla PHP-FPM
+- `docker-compose.yml` bez domyślnego hasła `admin`. Konfiguracja ze zmiennych środowiskowych (pominięcie kreatora) tylko przy podanym kluczu API i haśle min. 6 znaków
+- Skrypt startowy odporny na końce linii CRLF (pliki z Windowsa wgrane na Synology); `.gitattributes` wymusza LF dla plików kontenera
+- `.dockerignore`: `data/.env` i `data/.installed` nie trafiają do obrazu
+
+### Logowanie i kreator
+- Puste hasło w konfiguracji nigdy nie wpuszcza (wcześniej możliwe przy niedokończonej konfiguracji)
+- Login i hasło porównywane przez `hash_equals()`
+- Kreator: znak nowej linii w polu nie dopisze do `.env` własnej zmiennej
+- Starsze instalacje z `.env` w katalogu głównym działają bez zmian (odczyt: najpierw `data/.env`, potem `.env`)
+
+### Instalacja (`docs/INSTALL.md`, README)
+- Nowa sekcja „Background jobs": cron i Harmonogram zadań DSM dla instalacji bez Dockera
+- Polecenia `apt` działają na Debianie 12+ i Ubuntu 22.04+ (pakiet `php8.2-sodium` nie istnieje, a Ubuntu nie ma `php8.2-*`); RHEL 9 z PHP 8.2
+- Klucz API: tylko do odczytu wystarcza do monitoringu, przełączanie obiektów i reguł firewalla wymaga prawa zapisu
+- Reverse proxy w DSM po nazwie hosta (DSM nie obsługuje ścieżek), test bezpieczeństwa także dla nginx, `docker compose`, aktualna lista wyzwalaczy, diagnostyczny `curl` z kluczem API
+
+### Znane ograniczenia
+- Część zapytań do kontrolera używa site'u `default` na sztywno - przy kilku site'ach dane z innego site'u mogą być niepełne
+
+---
+
 ## v2.8.0 (2026-10-05)
 
 Kafelki bezpieczeństwa na dashboardzie, oznaczanie losowych adresów MAC w inwentarzu, poprawne dane na stronie Bezpieczeństwo na UniFi 10.x.

@@ -1,0 +1,5 @@
+# Pliki uruchamiane w kontenerze (Linux) musz¹ mieæ LF - CRLF psuje skrypty startowe
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker/* text eol=lf
+docker-compose.yml text eol=lf

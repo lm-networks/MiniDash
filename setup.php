@@ -7,9 +7,10 @@ if (file_exists(__DIR__ . '/data/.installed')) {
     exit;
 }
 
-// Auto-detect existing installation (has .env with real API key)
-if (file_exists(__DIR__ . '/.env')) {
-    $envContent = file_get_contents(__DIR__ . '/.env');
+// Auto-detect existing installation (data/.env or legacy root .env with real API key)
+foreach ([__DIR__ . '/data/.env', __DIR__ . '/.env'] as $envCandidate) {
+    if (!file_exists($envCandidate)) continue;
+    $envContent = file_get_contents($envCandidate);
     if (preg_match('/UNIFI_API_KEY=(.+)/', $envContent, $m)) {
         $key = trim($m[1]);
         if ($key !== '' && $key !== 'your-api-key' && $key !== 'your-api-key-here') {
@@ -34,6 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'ADMIN_EMAIL'          => trim($_POST['admin_email'] ?? ''),
         'DEBUG'                => 'false',
     ];
+    // Znak nowej linii w polu dopisałby do .env własną zmienną (np. drugie ADMIN_PASSWORD)
+    $fields = array_map(fn($v) => str_replace(["\r", "\n"], '', $v), $fields);
 
     // Validate required fields
     if (empty($fields['UNIFI_CONTROLLER_URL'])) {
@@ -64,8 +67,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $env .= "# Debug mode\n";
         $env .= "DEBUG=false\n";
 
-        $envPath = __DIR__ . '/.env';
+        // data/.env, nie katalog główny: w Dockerze data/ to wolumen (przetrwa aktualizację),
+        // a serwer WWW nie potrzebuje prawa zapisu do katalogu aplikacji
         $dataDir = __DIR__ . '/data';
+        $envPath = $dataDir . '/.env';
 
         // Ensure data directory exists
         if (!is_dir($dataDir)) {
@@ -74,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Write .env
         if (@file_put_contents($envPath, $env) === false) {
-            $error = 'Cannot write .env file — check directory permissions';
+            $error = 'Cannot write data/.env - check that the data/ directory is writable by the web server';
         } else {
             @chmod($envPath, 0600);
             // Mark as installed
