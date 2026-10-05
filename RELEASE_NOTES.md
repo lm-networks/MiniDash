@@ -1,5 +1,28 @@
 # MiniDash — Release Notes
 
+## v2.8.0 (2026-10-05)
+
+Kafelki bezpieczeństwa na dashboardzie, oznaczanie losowych adresów MAC w inwentarzu, poprawne dane na stronie Bezpieczeństwo na UniFi 10.x.
+
+### Dashboard - bezpieczeństwo
+- Nowe kafelki „Ocena bezpieczeństwa" (pierścień z wynikiem) i „Zablokowane (firewall)" z liczbą blokad IPS/firewalla z ostatnich 24h
+- Kliknięcie w blokady otwiera rozbicie według dostawcy (ISP) z flagami krajów
+- Dane z nowego `api_security_summary.php`; ocena liczona w `compute_security_score()`, wspólnej dla dashboardu i `security.php`
+
+### Inwentarz (`inventory.php`)
+- Plakietka „losowy MAC" przy adresach lokalnie administrowanych (telefony z randomizacją MAC), żeby jednorazowe wpisy nie udawały trwałego sprzętu
+
+### Bezpieczeństwo (`security.php`)
+- Naprawione 0 zagrożeń i 0 reguł na UniFi 10.x: reguły czytane z firewall-policies, zablokowane zagrożenia z traffic-flows. Ocena nie jest już zaniżana za „brak reguł"
+- GEO-BLOCK czyta Region Blocking z ustawienia `usg_geo` (stan, lista krajów, kierunek) - wcześniej pokazywał blokadę jako wyłączoną
+- Liczba w pierścieniu oceny już się nie rozjeżdża (brakujący `viewBox` w SVG)
+- „Ips" → „IPS"
+
+### Repozytorium
+- Projekt przeniesiony do organizacji: `github.com/lm-networks/MiniDash`. Stare adresy przekierowują, a sprawdzanie aktualizacji korzysta już z nowego
+
+---
+
 ## v2.7.0 (2026-10-04)
 
 Transfer per urządzenie i VLAN, inwentarz urządzeń, naprawa strony logów.
