@@ -35,6 +35,7 @@ $t_total = count($threat_events);
 $t_blocked = count(array_filter($threat_events, fn($e) => $e['action'] === 'blocked'));
 $t_alerts = $t_total - $t_blocked;
 $t_high = count(array_filter($threat_events, fn($e) => $e['risk'] === 'high'));
+$t_high_blocked = count(array_filter($threat_events, fn($e) => $e['risk'] === 'high' && $e['action'] === 'blocked'));
 if (empty($security_settings) || !is_array($security_settings)) {
     $security_settings = [
         'ips_enabled' => false, 'ips_mode' => 'disabled',
@@ -292,13 +293,13 @@ $rule_list = $security_settings['rule_list'] ?? [];
                     <div class="text-3xl font-black tracking-tighter" id="stat-alerts"><?= $t_alerts ?></div>
                     <div class="text-slate-400 text-xs mt-1 font-medium italic"><?= __('threats.alerts_desc') ?></div>
                 </div>
-                <div class="glass-card p-5 stat-glow-red">
+                <div class="glass-card p-5 stat-glow-red cursor-pointer hover:scale-[1.02] transition-transform" onclick="openHighRiskModal()" title="<?= __('threats.high_modal_title') ?>">
                     <div class="flex justify-between items-center mb-4">
                         <div class="p-2.5 bg-red-500/10 rounded-xl text-red-400"><i data-lucide="flame" class="w-5 h-5"></i></div>
                         <span class="text-xs font-black text-slate-500 uppercase tracking-widest"><?= __('threats.critical_label') ?></span>
                     </div>
                     <div class="text-3xl font-black tracking-tighter" id="stat-high"><?= $t_high ?></div>
-                    <div class="text-slate-400 text-xs mt-1 font-medium italic"><?= __('threats.high_risk') ?></div>
+                    <div class="text-slate-400 text-xs mt-1 font-medium italic"><?= __('threats.high_risk') ?><span id="stat-high-blocked" class="<?= $t_high_blocked < $t_high ? 'text-red-400 not-italic font-bold' : '' ?>"><?= $t_high ? ' · ' . __('threats.blocked_short') . ' ' . $t_high_blocked . '/' . $t_high : '' ?></span></div>
                 </div>
             </div>
 
@@ -404,6 +405,20 @@ $rule_list = $security_settings['rule_list'] ?? [];
     </div>
 
     <?php include 'includes/confirm_modal.php'; ?>
+
+    <!-- High Risk Modal (przed Event Detail, żeby szczegóły zdarzenia otwierały się nad nim) -->
+    <div id="highRiskModal" class="modal-overlay" onclick="if(event.target===this) closeHighRiskModal()">
+        <div class="modal-container max-w-4xl" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>
+                    <h2 class="text-xl font-bold text-white flex items-center gap-2"><i data-lucide="flame" class="w-6 h-6 text-red-400"></i> <?= __('threats.high_modal_title') ?></h2>
+                    <p class="text-slate-500 text-xs mt-1"><?= __('threats.high_modal_subtitle') ?> <span id="high-risk-range" class="font-mono">24H</span></p>
+                </div>
+                <button type="button" onclick="closeHighRiskModal()" class="p-2 hover:bg-white/5 rounded-xl transition text-slate-500 hover:text-white"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            <div class="modal-body p-6" id="high-risk-body"></div>
+        </div>
+    </div>
 
     <!-- Event Detail Modal -->
     <div id="eventDetailModal" class="modal-overlay" onclick="if(event.target===this) closeEventDetail()">
@@ -735,9 +750,9 @@ $rule_list = $security_settings['rule_list'] ?? [];
     }
 
     // ── Event Detail ──
-    function showEventDetail(idx) {
-        const filtered = getFilteredEvents();
-        const e = filtered[idx];
+    function showEventDetail(idx) { renderEventDetail(getFilteredEvents()[idx]); }
+    function showEventDetailRaw(idx) { renderEventDetail(allEvents[idx]); }
+    function renderEventDetail(e) {
         if (!e) return;
         const c = riskColors[e.risk] || riskColors.medium;
         const time = new Date(e.timestamp * 1000).toLocaleString('pl-PL');
@@ -788,7 +803,129 @@ $rule_list = $security_settings['rule_list'] ?? [];
         document.body.style.overflow = 'hidden';
         setTimeout(() => lucide.createIcons(), 50);
     }
-    function closeEventDetail() { document.getElementById('eventDetailModal').classList.remove('active'); document.body.style.overflow = ''; }
+    function closeEventDetail() {
+        document.getElementById('eventDetailModal').classList.remove('active');
+        if (!document.getElementById('highRiskModal').classList.contains('active')) document.body.style.overflow = '';
+    }
+
+    // ── High Risk ──
+    function updateHighCard() {
+        const high = allEvents.filter(e => e.risk === 'high');
+        const blocked = high.filter(e => e.action === 'blocked').length;
+        const el = document.getElementById('stat-high-blocked');
+        document.getElementById('stat-high').textContent = high.length;
+        el.textContent = high.length ? ` · <?= __('threats.blocked_short') ?> ${blocked}/${high.length}` : '';
+        el.className = blocked < high.length ? 'text-red-400 not-italic font-bold' : '';
+    }
+    function openHighRiskModal() {
+        renderHighRiskModal();
+        document.getElementById('highRiskModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeHighRiskModal() { document.getElementById('highRiskModal').classList.remove('active'); document.body.style.overflow = ''; }
+    function renderHighRiskModal() {
+        const body = document.getElementById('high-risk-body');
+        document.getElementById('high-risk-range').textContent = currentRange.toUpperCase();
+        const high = allEvents.filter(e => e.risk === 'high');
+
+        if (!high.length) {
+            body.innerHTML = `<div class="text-center py-12">
+                <div class="inline-flex p-4 bg-emerald-500/10 rounded-2xl text-emerald-400 mb-4"><i data-lucide="shield-check" class="w-8 h-8"></i></div>
+                <p class="text-white font-bold"><?= __('threats.high_none') ?></p>
+            </div>`;
+            lucide.createIcons();
+            return;
+        }
+
+        const fmt = ts => new Date(ts * 1000).toLocaleString('pl-PL', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        const blocked = high.filter(e => e.action === 'blocked').length;
+        const notBlocked = high.length - blocked;
+        const targets = new Set(high.map(e => e.dst_ip || 'Local'));
+
+        // Grupowanie po IP atakującego, najaktywniejsze na górze
+        const groups = {};
+        high.forEach(e => { (groups[e.src_ip] = groups[e.src_ip] || []).push(e); });
+        const sorted = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+
+        const tile = (label, value, cls) => `<div class="p-4 bg-slate-900/50 rounded-2xl border border-white/5">
+            <div class="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">${label}</div>
+            <div class="text-2xl font-black tracking-tighter ${cls}">${value}</div>
+        </div>`;
+
+        const status = notBlocked === 0
+            ? `<div class="flex items-start gap-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                   <i data-lucide="shield-check" class="w-5 h-5 text-emerald-400 shrink-0 mt-0.5"></i>
+                   <p class="text-sm text-emerald-200"><?= __('threats.high_all_blocked') ?></p>
+               </div>`
+            : `<div class="flex items-start gap-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/30">
+                   <i data-lucide="shield-alert" class="w-5 h-5 text-red-400 shrink-0 mt-0.5"></i>
+                   <p class="text-sm text-red-200"><?= __('threats.high_not_blocked') ?> <b class="text-white">${notBlocked}</b>. <?= __('threats.high_not_blocked_hint') ?></p>
+               </div>`;
+
+        const groupHtml = sorted.map(([ip, evs]) => {
+            const geo = evs[0].src_geo || {};
+            const cc = evs[0].country_code || 'un';
+            const times = evs.map(e => e.timestamp);
+            const dsts = [...new Set(evs.map(e => (e.dst_ip || 'Local') + (e.dst_port ? ':' + e.dst_port : '')))];
+            const safeIp = escHtml(ip);
+            const rows = evs.map(e => {
+                const isBlocked = e.action === 'blocked';
+                return `<div class="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] hover:bg-white/5 border border-white/5 cursor-pointer transition" onclick="showEventDetailRaw(${allEvents.indexOf(e)})">
+                    <span class="shrink-0 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest border ${isBlocked ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}">${isBlocked ? '<?= __('threats.action_blocked') ?>' : '<?= __('threats.action_alert') ?>'}</span>
+                    <div class="min-w-0 flex-grow">
+                        <div class="text-sm text-white truncate">${escHtml(e.signature)}</div>
+                        <div class="text-[11px] text-slate-500 flex flex-wrap gap-x-3">
+                            <span>${fmt(e.timestamp)}</span>
+                            <span class="font-mono">${escHtml(e.dst_ip || 'Local')}${e.dst_port ? ':' + escHtml(String(e.dst_port)) : ''}</span>
+                            ${e.protocol ? `<span class="font-mono">${escHtml(e.protocol)}</span>` : ''}
+                            ${e.category ? `<span class="italic">${escHtml(e.category)}</span>` : ''}
+                            ${e.signature_id ? `<span class="font-mono">SID ${escHtml(String(e.signature_id))}</span>` : ''}
+                        </div>
+                    </div>
+                    <i data-lucide="chevron-right" class="w-4 h-4 text-slate-600 shrink-0"></i>
+                </div>`;
+            }).join('');
+
+            return `<div class="p-4 bg-slate-900/50 rounded-2xl border border-white/5">
+                <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            ${cc !== 'un' && cc !== 'local' ? `<img src="img/flags/${escHtml(cc)}.png" class="w-4 h-3 rounded-sm opacity-80">` : ''}
+                            <span class="text-white font-mono font-bold">${safeIp}</span>
+                            <span class="px-2 py-0.5 rounded-md text-[11px] font-black bg-red-500/10 text-red-400">${evs.length}×</span>
+                        </div>
+                        ${geo.country ? `<p class="text-slate-400 text-xs mt-1">${escHtml(geo.country)}${geo.city ? ', ' + escHtml(geo.city) : ''}</p>` : ''}
+                        ${geo.org ? `<p class="text-slate-500 text-[11px] mt-0.5">${escHtml(geo.org)}</p>` : ''}
+                    </div>
+                    <div class="flex gap-2 shrink-0">
+                        <a href="https://www.abuseipdb.com/check/${encodeURIComponent(ip)}" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-[11px] font-bold transition border border-white/10 flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i> AbuseIPDB</a>
+                        <button onclick="addToIgnore('${safeIp}')" class="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg text-[11px] font-bold transition border border-amber-500/20 flex items-center gap-1"><i data-lucide="shield-off" class="w-3 h-3"></i> <?= __('threats.ignore_ip') ?></button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px] mb-3">
+                    <div><span class="text-slate-500"><?= __('threats.high_first_seen') ?>:</span> <span class="text-slate-300">${fmt(Math.min(...times))}</span></div>
+                    <div><span class="text-slate-500"><?= __('threats.high_last_seen') ?>:</span> <span class="text-slate-300">${fmt(Math.max(...times))}</span></div>
+                    <div class="sm:col-span-2"><span class="text-slate-500"><?= __('threats.high_targets') ?>:</span> <span class="text-emerald-400/80 font-mono">${dsts.map(escHtml).join(', ')}</span></div>
+                </div>
+                <div class="space-y-2">${rows}</div>
+            </div>`;
+        }).join('');
+
+        body.innerHTML = `<div class="space-y-5">
+            ${status}
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                ${tile('<?= __('threats.high_events') ?>', high.length, 'text-red-400')}
+                ${tile('<?= __('threats.blocked_label') ?>', `${blocked}/${high.length}`, notBlocked ? 'text-amber-400' : 'text-emerald-400')}
+                ${tile('<?= __('threats.high_sources') ?>', sorted.length, 'text-white')}
+                ${tile('<?= __('threats.high_targets') ?>', targets.size, 'text-white')}
+            </div>
+            <div>
+                <h4 class="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3"><?= __('threats.high_by_source') ?></h4>
+                <div class="space-y-3">${groupHtml}</div>
+            </div>
+        </div>`;
+        lucide.createIcons();
+    }
 
     // ── Filters ──
     function getFilteredEvents() {
@@ -840,7 +977,8 @@ $rule_list = $security_settings['rule_list'] ?? [];
         document.getElementById('stat-total').textContent = s.total ?? 0;
         document.getElementById('stat-blocked').textContent = s.blocked ?? 0;
         document.getElementById('stat-alerts').textContent = s.alerts ?? 0;
-        document.getElementById('stat-high').textContent = s.high ?? 0;
+        updateHighCard();
+        if (document.getElementById('highRiskModal').classList.contains('active')) renderHighRiskModal();
     }
     function updateSidebar(data) {
         // Countries
@@ -886,6 +1024,8 @@ $rule_list = $security_settings['rule_list'] ?? [];
         closeEventDetail();
         allEvents = allEvents.filter(e => e.src_ip !== ip);
         applyFilters();
+        updateHighCard();
+        if (document.getElementById('highRiskModal').classList.contains('active')) renderHighRiskModal();
     }
 
     // ── Modals ──

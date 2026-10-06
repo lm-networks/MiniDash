@@ -629,7 +629,20 @@
         "risk_medium": "Medium",
         "risk_low": "Low",
         "top_categories": "Top threat categories",
-        "no_category_data": "No category data"
+        "no_category_data": "No category data",
+        "blocked_short": "blocked",
+        "high_modal_title": "High risk events",
+        "high_modal_subtitle": "IPS events rated high by UniFi, range:",
+        "high_none": "No high risk events in the selected range",
+        "high_all_blocked": "All high risk events were blocked by IPS. No action required.",
+        "high_not_blocked": "Events not blocked:",
+        "high_not_blocked_hint": "IPS only reported them (IDS mode or alert-only rule). Check the targeted hosts.",
+        "high_events": "Events",
+        "high_sources": "Attackers",
+        "high_targets": "Targets",
+        "high_by_source": "By attack source",
+        "high_first_seen": "First seen",
+        "high_last_seen": "Last seen"
     },
     "wan_history": {
         "title": "WAN link history",

@@ -629,7 +629,20 @@
         "risk_medium": "Średnie",
         "risk_low": "Niskie",
         "top_categories": "Top kategorie zagrożeń",
-        "no_category_data": "Brak danych o kategoriach"
+        "no_category_data": "Brak danych o kategoriach",
+        "blocked_short": "zablokowane",
+        "high_modal_title": "Zdarzenia wysokiego ryzyka",
+        "high_modal_subtitle": "Zdarzenia IPS oznaczone przez UniFi jako high, zakres:",
+        "high_none": "Brak zdarzeń wysokiego ryzyka w wybranym zakresie",
+        "high_all_blocked": "Wszystkie zdarzenia wysokiego ryzyka zostały zablokowane przez IPS. Nie wymagają działania.",
+        "high_not_blocked": "Niezablokowane zdarzenia:",
+        "high_not_blocked_hint": "IPS tylko je zgłosił (tryb IDS albo reguła typu alert). Sprawdź atakowane hosty.",
+        "high_events": "Zdarzenia",
+        "high_sources": "Atakujący",
+        "high_targets": "Cele",
+        "high_by_source": "Według źródła ataku",
+        "high_first_seen": "Pierwsze",
+        "high_last_seen": "Ostatnie"
     },
     "wan_history": {
         "title": "Historia łączy WAN",
