@@ -1,5 +1,21 @@
 # MiniDash — Release Notes
 
+## v2.8.2 (2026-10-06)
+
+Poprawka: karta „Krytyczne" w Threat Watch pokazywała samą liczbę zdarzeń wysokiego ryzyka, bez informacji czy zostały zablokowane i czego dotyczyły. „3 krytyczne" wyglądało jak aktywne zagrożenie, nawet gdy IPS zablokował wszystkie ataki.
+
+### Bezpieczeństwo (`security.php`)
+- Podpis karty „Krytyczne" pokazuje „zablokowane X/Y"; na czerwono, gdy któreś zdarzenie wysokiego ryzyka nie zostało zablokowane
+- Kliknięcie w kartę otwiera modal „Zdarzenia wysokiego ryzyka" ze statusem: wszystko zablokowane (brak działań) albo liczba niezablokowanych zdarzeń z podpowiedzią, co sprawdzić
+- W modalu podsumowanie: liczba zdarzeń, zablokowane X/Y, liczba atakujących i celów
+- Zdarzenia pogrupowane po IP atakującego: kraj, miasto, operator, pierwsze i ostatnie wystąpienie, atakowane cele (IP:port)
+- Lista sygnatur z czasem, akcją, kategorią i SID; kliknięcie otwiera szczegóły zdarzenia
+- Przy każdym IP link do AbuseIPDB i „Ignoruj IP"
+- Modal i karta odświeżają się razem z auto-odświeżaniem (60 s), zmianą zakresu 1H/24H/7D i po zignorowaniu IP
+- Nowe klucze tłumaczeń PL/EN (`threats.high_*`, `threats.blocked_short`)
+
+---
+
 ## v2.8.1 (2026-10-05)
 
 Poprawki instalacji: konfiguracja w Dockerze przetrwa aktualizację, zadania w tle w kontenerze, bezpieczniejsze logowanie, poprawiona instrukcja instalacji.
