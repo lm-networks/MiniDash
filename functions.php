@@ -1642,12 +1642,21 @@ function get_access_objects(): array
 }
 
 /**
+ * ID obiektu z API konsoli: 24 znaki hex (Network do 10.x, MongoDB ObjectId)
+ * albo UUID (Network 11+). ID trafia do ścieżki PUT, więc nic poza tymi formatami.
+ */
+function is_unifi_object_id(string $id): bool
+{
+    return (bool)preg_match('/^(?:[a-f0-9]{24}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i', $id);
+}
+
+/**
  * Włącza/wyłącza obiekt. Pobiera aktualną wersję z konsoli i odsyła ją z samą zmianą
  * flagi `enabled` — nic innego w konfiguracji obiektu się nie zmienia.
  */
 function set_access_object_enabled(string $id, bool $enabled): array
 {
-    if (!preg_match('/^[a-f0-9]{24}$/i', $id)) return ['ok' => false, 'error' => 'invalid id'];
+    if (!is_unifi_object_id($id)) return ['ok' => false, 'error' => 'invalid id'];
     $list = fetch_api('/proxy/network/v2/api/site/default/object-oriented-network-configs')['data'] ?? [];
     $obj = null;
     foreach ((array)$list as $o) if (($o['id'] ?? '') === $id) { $obj = $o; break; }
@@ -1836,7 +1845,7 @@ function get_firewall_view(): array
  */
 function set_firewall_policy_enabled(string $id, bool $enabled): array
 {
-    if (!preg_match('/^[a-f0-9]{24}$/i', $id)) return ['ok' => false, 'error' => 'invalid id'];
+    if (!is_unifi_object_id($id)) return ['ok' => false, 'error' => 'invalid id'];
     $pol = null;
     foreach ((fetch_api('/proxy/network/v2/api/site/default/firewall-policies')['data'] ?? []) as $p) {
         if (($p['_id'] ?? '') === $id) { $pol = $p; break; }

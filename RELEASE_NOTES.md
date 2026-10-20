@@ -27,6 +27,9 @@ Nowy kreator instalacji i strona „Konsola UniFi" w panelu. Docker nie przekazu
 ### Docker
 - `docker-compose.yml` bez sekcji `environment` z kluczem API i hasłem - zmienne środowiskowe są widoczne w Container Managerze i `docker inspect`. Konfiguracja tylko przez kreator; pominięcie kreatora nadal możliwe po ręcznym dopisaniu `environment:` (opis w `docs/INSTALL.md`)
 
+### Poprawki
+- Przełączanie obiektów kontroli dostępu (dashboard) i własnych reguł firewalla nie działało na UniFi Network 11 („invalid id"): konsola zwraca teraz ID w formacie UUID zamiast 24 znaków hex. Przyjmowane są oba formaty (`is_unifi_object_id()`)
+
 ### Wspólne
 - `includes/unifi_probe.php`: normalizacja adresu, test połączenia, lista site'ów (kreator, strona konsoli, `api_detect_site.php`)
 - `api_detect_site.php` po instalacji działa dla zalogowanego admina z tokenem CSRF (wcześniej 403 dla wszystkich)

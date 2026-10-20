@@ -119,6 +119,15 @@ if (count($missing) > 0) {
 t_assert('EN covers all PL keys', 0, count($missing), $total_pass, $total_fail);
 
 // ═══════════════════════════════════════
+echo "\n=== UnifiObjectIdTest ===\n";
+
+t_assert('id: ObjectId (Network 10.x)', true, is_unifi_object_id('65f1c2a9e4b0a1b2c3d4e5f6'), $total_pass, $total_fail);
+t_assert('id: UUID (Network 11+)', true, is_unifi_object_id('98042861-6a90-42ba-8222-202e80090182'), $total_pass, $total_fail);
+t_assert('id: pusty', false, is_unifi_object_id(''), $total_pass, $total_fail);
+t_assert('id: ścieżka w id', false, is_unifi_object_id('98042861-6a90-42ba-8222-202e80090182/../x'), $total_pass, $total_fail);
+t_assert('id: UUID bez myślników', false, is_unifi_object_id('980428616a9042ba8222202e80090182'), $total_pass, $total_fail);
+
+// ═══════════════════════════════════════
 echo "\n=== WanLinksTest ===\n";
 
 $gw_dual = [
