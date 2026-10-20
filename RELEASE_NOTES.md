@@ -1,5 +1,29 @@
 # MiniDash — Release Notes
 
+## v2.9.1 (2026-10-20)
+
+Poprawki po pierwszych instalacjach 2.9.0: przełączanie kontroli dostępu i reguł firewalla na UniFi Network 11, sekrety w `config.json` zawsze szyfrowane, jasna instrukcja, skąd wziąć klucz API, oraz wersja z hashem i log zmian w Dockerze.
+
+### Poprawki
+- Przełączanie obiektów kontroli dostępu (dashboard) i własnych reguł firewalla nie działało na UniFi Network 11 („Could not change the object: invalid id"). Konsola zwraca teraz ID w formacie UUID zamiast 24 znaków hex; przyjmowane są oba formaty (`is_unifi_object_id()`, 5 nowych testów)
+- Docker: w stopce brakowało hasha commita i logu zmian (`.dockerignore` wycinał `.git` i `*.md`). Do obrazu trafia `RELEASE_NOTES.md` oraz z `.git` tylko `HEAD`, `refs` i `packed-refs`; plik `REVISION` z hashem dla instalacji z `git archive` i paczki ZIP z GitHuba; stopka czyta też `packed-refs` (po `git gc`)
+- nginx w kontenerze blokuje `*.md`, jak `.htaccess`
+
+### Bezpieczeństwo konfiguracji
+- „Ustawienia systemu" (`devices.php`): sekcja połączenia z kontrolerem tylko do podglądu, z przyciskiem do strony „Konsola UniFi". Dawny zapis (`save_config`) wrzucał do `data/config.json` całą odszyfrowaną konfigurację (klucz API, hasło admina, tokeny) jawnym tekstem, a klucz API był w źródle strony
+- Zapis hostów do pingowania i zapis w `settings_notifications.php` szyfrują sekrety (wcześniej klucz API, hasło i token Telegrama/SMTP mogły trafić do pliku jawnie)
+
+### Kreator i Konsola UniFi
+- Klucz API: rozwijane „Skąd wziąć klucz API?" z krokami (UniFi Network → Settings → Control Plane → Integrations → Create API Key) i ostrzeżeniem, że klucz z unifi.ui.com (Site Manager) konsola odrzuci błędem 401. Wcześniejsza podpowiedź „Admins & Users → API Keys" prowadziła do kluczy chmurowych
+- Site jako pole tekstowe z podpowiedziami: lista z testu połączenia albo wpis ręczny
+- „Zapisz bez sprawdzania" tylko przy braku połączenia z konsolą. Serwer zawsze testuje połączenie, więc odrzuconego klucza (401) nie da się zapisać - wcześniej dało się zainstalować panel z kluczem, który niczego nie pobierał
+- Na stronie „Konsola UniFi" podpowiedź o kluczu widać także przy zapisanym kluczu
+
+### Dokumentacja
+- `README.md` i `docs/INSTALL.md`: skąd wziąć lokalny klucz API; w rozwiązywaniu problemów - 401 przy poprawnie wyglądającym kluczu to prawie zawsze klucz Site Managera
+
+---
+
 ## v2.9.0 (2026-10-20)
 
 Nowy kreator instalacji i strona „Konsola UniFi" w panelu. Docker nie przekazuje już klucza API ani hasła admina przez zmienne środowiskowe.
@@ -8,10 +32,8 @@ Nowy kreator instalacji i strona „Konsola UniFi" w panelu. Docker nie przekazu
 - Po polsku i angielsku (przełącznik PL/EN, domyślnie język przeglądarki)
 - Wystarczy sam adres IP konsoli, np. `10.0.0.1` - `https://` dopisuje się samo, port jest zachowany
 - Przycisk „Sprawdź połączenie": test adresu i klucza API, lista site'ów do wyboru. Komunikaty rozróżniają brak połączenia i odrzucony klucz
-- Przed zapisem kreator sprawdza połączenie jeszcze raz. „Zapisz bez sprawdzania" jest dostępne tylko przy braku połączenia z konsolą; odrzuconego klucza (401) nie da się zapisać
+- Przed zapisem kreator sprawdza połączenie jeszcze raz; gdy konsola jest akurat niedostępna, można zaznaczyć „Zapisz bez sprawdzania"
 - Pole „Powtórz hasło"; jasny podpis, że login i hasło są do MiniDash, nie do konsoli UniFi
-- Site jako pole tekstowe z podpowiedziami: lista z testu połączenia albo wpis ręczny (wcześniej listę wypełniał tylko udany test)
-- Poprawiona podpowiedź, skąd wziąć klucz API: aplikacja UniFi Network → Settings → Control Plane → Integrations (nie Admins & Users, nie unifi.ui.com); to samo w `docs/INSTALL.md`
 - `data/.env` dostaje uprawnienia 0600, zanim trafią do niego sekrety
 
 ### Konsola UniFi (`console_settings.php`, menu użytkownika)
@@ -20,15 +42,8 @@ Nowy kreator instalacji i strona „Konsola UniFi" w panelu. Docker nie przekazu
 - Test połączenia i wybór site'u jak w kreatorze; zapis wymaga hasła do MiniDash
 - Zapis do `data/config.json` (klucz szyfrowany, jak pozostałe sekrety), ma pierwszeństwo przed `.env`; po zmianie czyszczony jest cache odpowiedzi API
 
-### Bezpieczeństwo konfiguracji
-- „Ustawienia systemu" (`devices.php`): sekcja połączenia z kontrolerem tylko do podglądu, z przyciskiem do strony „Konsola UniFi". Dawny zapis (`save_config`) wrzucał do `data/config.json` całą odszyfrowaną konfigurację - klucz API, hasło admina, tokeny - jawnym tekstem, a klucz API był w źródle strony
-- Zapis hostów do pingowania i zapis w `settings_notifications.php` szyfrują sekrety (wcześniej klucz API, hasło i token Telegrama/SMTP mogły trafić do pliku jawnie)
-
 ### Docker
 - `docker-compose.yml` bez sekcji `environment` z kluczem API i hasłem - zmienne środowiskowe są widoczne w Container Managerze i `docker inspect`. Konfiguracja tylko przez kreator; pominięcie kreatora nadal możliwe po ręcznym dopisaniu `environment:` (opis w `docs/INSTALL.md`)
-
-### Poprawki
-- Przełączanie obiektów kontroli dostępu (dashboard) i własnych reguł firewalla nie działało na UniFi Network 11 („invalid id"): konsola zwraca teraz ID w formacie UUID zamiast 24 znaków hex. Przyjmowane są oba formaty (`is_unifi_object_id()`)
 
 ### Wspólne
 - `includes/unifi_probe.php`: normalizacja adresu, test połączenia, lista site'ów (kreator, strona konsoli, `api_detect_site.php`)
