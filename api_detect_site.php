@@ -1,93 +1,37 @@
 <?php
-/** Auto-detect UniFi Site ID — used by Setup Wizard */
+/** Created by Łukasz Misiura (c) 2025 | dev.lm-ads.com **/
+/** Test połączenia z konsolą + lista site'ów - kreator instalacji i strona „Konsola UniFi" */
 header('Content-Type: application/json');
+require_once __DIR__ . '/includes/unifi_probe.php';
 
-// Tylko dla kreatora instalacji - po instalacji endpoint jest zamknięty
-// (inaczej każdy mógłby kazać serwerowi łączyć się z dowolnym adresem).
+$stored_key = '';
+// Przed instalacją endpoint obsługuje kreator. Po instalacji tylko zalogowany admin z tokenem
+// CSRF - inaczej każdy mógłby kazać serwerowi łączyć się z dowolnym adresem.
 if (file_exists(__DIR__ . '/data/.installed')) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Setup already completed']);
+    require_once __DIR__ . '/config.php';
+    require_once __DIR__ . '/functions.php';
+    if (empty($_SESSION['logged_in']) || !verify_csrf($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) {
+        http_response_code(403);
+        echo json_encode(['error' => 'forbidden', 'sites' => []]);
+        exit;
+    }
+    // Na stronie ustawień puste pole klucza = sprawdzamy zapisany klucz
+    $stored_key = (string)($config['api_key'] ?? '');
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['error' => 'method', 'sites' => []]);
     exit;
 }
 
-$controller_url = trim($_POST['controller_url'] ?? '');
-$api_key = trim($_POST['api_key'] ?? '');
+$base = unifi_normalize_url($_POST['controller_url'] ?? '');
+$key  = trim($_POST['api_key'] ?? '') ?: $stored_key;
 
-if (empty($controller_url) || empty($api_key)) {
-    echo json_encode(['error' => 'Controller URL and API Key required']);
+if ($key === '') {
+    echo json_encode(['error' => 'key', 'sites' => []]);
     exit;
 }
 
-$base = rtrim($controller_url, '/');
-$headers = [
-    "X-API-KEY: $api_key",
-    "Accept: application/json"
-];
-$ctx_opts = [
-    'http' => ['timeout' => 5],
-    'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]
-];
-
-// Try Integration API first — returns site list with IDs
-$sites = [];
-
-$ch = curl_init("$base/proxy/network/integration/v1/sites");
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_SSL_VERIFYPEER => false,
-    CURLOPT_SSL_VERIFYHOST => false,
-    CURLOPT_CONNECTTIMEOUT => 5,
-    CURLOPT_TIMEOUT => 10,
-    CURLOPT_HTTPHEADER => $headers,
-]);
-$resp = curl_exec($ch);
-$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$err = curl_error($ch);
-curl_close($ch);
-
-if ($http_code === 200 && $resp) {
-    $data = json_decode($resp, true);
-    if (!empty($data['data']) && is_array($data['data'])) {
-        foreach ($data['data'] as $site) {
-            $sites[] = [
-                'id' => $site['siteId'] ?? $site['id'] ?? '',
-                'name' => $site['meta']['name'] ?? $site['name'] ?? 'Unknown',
-            ];
-        }
-    }
-}
-
-// Fallback: Traditional API
-if (empty($sites)) {
-    $ch = curl_init("$base/proxy/network/api/self/sites");
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT => 10,
-        CURLOPT_HTTPHEADER => $headers,
-    ]);
-    $resp = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($http_code === 200 && $resp) {
-        $data = json_decode($resp, true);
-        foreach (($data['data'] ?? []) as $site) {
-            $sites[] = [
-                'id' => $site['_id'] ?? $site['name'] ?? 'default',
-                'name' => $site['desc'] ?? $site['name'] ?? 'Default',
-            ];
-        }
-    }
-}
-
-if (empty($sites)) {
-    echo json_encode([
-        'error' => $err ?: "Cannot connect to controller (HTTP $http_code)",
-        'sites' => []
-    ]);
-} else {
-    echo json_encode(['sites' => $sites]);
-}
+$res = unifi_detect_sites($base, $key);
+echo json_encode(['controller_url' => $base] + $res);

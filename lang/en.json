@@ -13,7 +13,8 @@
         "logout": "Logout",
         "process_manager": "Process Manager",
         "wan_link": "WAN Link",
-        "notification_settings": "Notification Settings"
+        "notification_settings": "Notification Settings",
+        "console_settings": "UniFi console"
     },
     "common": {
         "update_available": "Update available",
@@ -845,5 +846,39 @@
         "confirm_all": "Approve all currently seen devices?",
         "random_mac": "random MAC",
         "random_mac_hint": "Locally-administered address - a phone with MAC randomization. It changes, not a permanent device."
+    },
+    "console_cfg": {
+        "title": "UniFi console",
+        "subtitle": "Console address, API key and site MiniDash reads its data from",
+        "section_console": "Console connection",
+        "address": "Console IP address",
+        "address_hint": "UDR, UDM, UCG or Cloud Key. The address alone is enough, https:// is added for you.",
+        "api_key": "API key",
+        "api_key_hint": "On the console: Settings → Admins & Users → API Keys → Create API Key",
+        "api_key_keep": "The saved key ends with {last4}. Leave the field empty to keep it.",
+        "show": "Show",
+        "test": "Test connection",
+        "testing": "Connecting to the console...",
+        "site": "Site",
+        "site_hint": "The list refreshes after the connection test.",
+        "found_one": "Connected. Site: {name}",
+        "found_many": "Connected. Sites found: {n} - pick the right one.",
+        "err_url": "Invalid console address. Enter e.g. 10.0.0.1",
+        "err_key": "No API key.",
+        "err_connect": "Cannot reach the console at this address ({detail}).",
+        "err_auth": "The console rejected the API key ({detail}). Check that it was copied in full.",
+        "err_http": "The console answered, but without a site list ({detail}).",
+        "err_fetch": "The test could not run - reload the page.",
+        "skip_check": "Save without checking (the console is unreachable right now)",
+        "current_password": "Your MiniDash password",
+        "current_password_hint": "Confirms the change - the same password you log in with.",
+        "wrong_password": "Wrong password - nothing was saved.",
+        "csrf": "The form session expired - reload the page and try again.",
+        "e_site": "Invalid Site ID.",
+        "e_write": "Cannot write data/config.json - the data/ directory must be writable by the web server.",
+        "save": "Save",
+        "saved": "Saved. MiniDash is already using the new settings.",
+        "note_account": "Change your MiniDash username and password in the user menu → Personal.",
+        "note_env": "Settings saved here take precedence over the .env file."
     }
 }

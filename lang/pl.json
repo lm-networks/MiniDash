@@ -13,7 +13,8 @@
         "logout": "Wyloguj sesję",
         "process_manager": "Zarządca Procesów",
         "wan_link": "Łącze WAN",
-        "notification_settings": "Ustawienia powiadomień"
+        "notification_settings": "Ustawienia powiadomień",
+        "console_settings": "Konsola UniFi"
     },
     "common": {
         "update_available": "Dostepna aktualizacja",
@@ -845,5 +846,39 @@
         "confirm_all": "Zatwierdzić wszystkie obecnie widziane urządzenia?",
         "random_mac": "losowy MAC",
         "random_mac_hint": "Adres lokalnie administrowany - telefon z randomizacją MAC. Zmienia się, nie jest trwałym urządzeniem."
+    },
+    "console_cfg": {
+        "title": "Konsola UniFi",
+        "subtitle": "Adres konsoli, klucz API i site, z których MiniDash pobiera dane",
+        "section_console": "Połączenie z konsolą",
+        "address": "Adres IP konsoli",
+        "address_hint": "UDR, UDM, UCG albo Cloud Key. Wystarczy sam adres, https:// dopiszę.",
+        "api_key": "Klucz API",
+        "api_key_hint": "W konsoli: Settings → Admins & Users → API Keys → Create API Key",
+        "api_key_keep": "Zapisany klucz kończy się na {last4}. Zostaw pole puste, żeby go nie zmieniać.",
+        "show": "Pokaż",
+        "test": "Sprawdź połączenie",
+        "testing": "Łączę z konsolą...",
+        "site": "Site",
+        "site_hint": "Lista odświeży się po sprawdzeniu połączenia.",
+        "found_one": "Połączono. Site: {name}",
+        "found_many": "Połączono. Znalezione site'y: {n} - wybierz właściwy.",
+        "err_url": "Niepoprawny adres konsoli. Wpisz np. 10.0.0.1",
+        "err_key": "Brak klucza API.",
+        "err_connect": "Brak połączenia z konsolą pod tym adresem ({detail}).",
+        "err_auth": "Konsola odrzuciła klucz API ({detail}). Sprawdź, czy jest skopiowany w całości.",
+        "err_http": "Konsola odpowiedziała, ale bez listy site'ów ({detail}).",
+        "err_fetch": "Nie udało się wykonać testu - odśwież stronę.",
+        "skip_check": "Zapisz bez sprawdzania (konsola jest teraz niedostępna)",
+        "current_password": "Twoje hasło do MiniDash",
+        "current_password_hint": "Potwierdzenie zmiany - to samo hasło, którym się logujesz.",
+        "wrong_password": "Nieprawidłowe hasło - nic nie zostało zapisane.",
+        "csrf": "Sesja formularza wygasła - odśwież stronę i spróbuj jeszcze raz.",
+        "e_site": "Niepoprawny Site ID.",
+        "e_write": "Nie mogę zapisać data/config.json - katalog data/ musi być zapisywalny dla serwera WWW.",
+        "save": "Zapisz",
+        "saved": "Zapisane. MiniDash korzysta już z nowych ustawień.",
+        "note_account": "Login i hasło do MiniDash zmienisz w menu użytkownika → Osobiste.",
+        "note_env": "Ustawienia zapisane tutaj mają pierwszeństwo przed plikiem .env."
     }
 }

@@ -21,76 +21,190 @@ foreach ([__DIR__ . '/data/.env', __DIR__ . '/.env'] as $envCandidate) {
     }
 }
 
+require_once __DIR__ . '/includes/unifi_probe.php';
+
+// Kreator działa przed config.php (bez lang/*.json), więc ma własny, mały słownik.
+// Język: ?lang= > ciasteczko panelu > język przeglądarki.
+$lang = $_GET['lang'] ?? $_COOKIE['minidash_lang'] ?? '';
+if (!in_array($lang, ['pl', 'en'], true)) {
+    $lang = str_starts_with(strtolower($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''), 'pl') ? 'pl' : 'en';
+}
+if (isset($_GET['lang'])) {
+    setcookie('minidash_lang', $lang, ['expires' => time() + 31536000, 'path' => '/', 'samesite' => 'Lax']);
+}
+
+$T = [
+    'pl' => [
+        'subtitle'       => 'Pierwsza konfiguracja',
+        'console'        => 'Konsola UniFi',
+        'address'        => 'Adres IP konsoli',
+        'address_hint'   => 'UDR, UDM, UCG albo Cloud Key. Wystarczy sam adres, https:// dopiszę.',
+        'api_key'        => 'Klucz API',
+        'api_key_hint'   => 'W konsoli: Settings → Admins & Users → API Keys → Create API Key',
+        'show'           => 'Pokaż',
+        'test'           => 'Sprawdź połączenie',
+        'testing'        => 'Łączę z konsolą...',
+        'site'           => 'Site',
+        'site_hint'      => 'Uzupełni się po sprawdzeniu połączenia.',
+        'found_one'      => 'Połączono. Site: {name}',
+        'found_many'     => 'Połączono. Znalezione site\'y: {n} - wybierz właściwy.',
+        'err_url'        => 'Niepoprawny adres konsoli. Wpisz np. 10.0.0.1',
+        'err_key'        => 'Wpisz klucz API.',
+        'err_connect'    => 'Brak połączenia z konsolą pod tym adresem ({detail}).',
+        'err_auth'       => 'Konsola odrzuciła klucz API ({detail}). Sprawdź, czy jest skopiowany w całości.',
+        'err_http'       => 'Konsola odpowiedziała, ale bez listy site\'ów ({detail}).',
+        'err_fetch'      => 'Nie udało się wykonać testu - odśwież stronę.',
+        'skip_check'     => 'Zapisz bez sprawdzania (konsola jest teraz niedostępna)',
+        'account'        => 'Konto w MiniDash',
+        'account_hint'   => 'Tym loginem i hasłem zalogujesz się do panelu MiniDash. To nie jest konto konsoli UniFi.',
+        'username'       => 'Login',
+        'password'       => 'Hasło',
+        'password2'      => 'Powtórz hasło',
+        'min6'           => 'Min. 6 znaków',
+        'full_name'      => 'Imię i nazwisko',
+        'email'          => 'E-mail',
+        'save'           => 'Zapisz i przejdź dalej',
+        'done'           => 'Gotowe',
+        'done_text'      => 'Konfiguracja zapisana. Zaloguj się ustawionym przed chwilą loginem i hasłem.',
+        'go_login'       => 'Przejdź do logowania',
+        'e_username'     => 'Wpisz login do MiniDash.',
+        'e_password'     => 'Hasło musi mieć co najmniej 6 znaków.',
+        'e_password2'    => 'Hasła się różnią.',
+        'e_site'         => 'Niepoprawny Site ID.',
+        'e_write'        => 'Nie mogę zapisać data/.env - katalog data/ musi być zapisywalny dla serwera WWW.',
+    ],
+    'en' => [
+        'subtitle'       => 'Initial setup',
+        'console'        => 'UniFi console',
+        'address'        => 'Console IP address',
+        'address_hint'   => 'UDR, UDM, UCG or Cloud Key. The address alone is enough, https:// is added for you.',
+        'api_key'        => 'API key',
+        'api_key_hint'   => 'On the console: Settings → Admins & Users → API Keys → Create API Key',
+        'show'           => 'Show',
+        'test'           => 'Test connection',
+        'testing'        => 'Connecting to the console...',
+        'site'           => 'Site',
+        'site_hint'      => 'Filled in after the connection test.',
+        'found_one'      => 'Connected. Site: {name}',
+        'found_many'     => 'Connected. Sites found: {n} - pick the right one.',
+        'err_url'        => 'Invalid console address. Enter e.g. 10.0.0.1',
+        'err_key'        => 'Enter the API key.',
+        'err_connect'    => 'Cannot reach the console at this address ({detail}).',
+        'err_auth'       => 'The console rejected the API key ({detail}). Check that it was copied in full.',
+        'err_http'       => 'The console answered, but without a site list ({detail}).',
+        'err_fetch'      => 'The test could not run - reload the page.',
+        'skip_check'     => 'Save without checking (the console is unreachable right now)',
+        'account'        => 'MiniDash account',
+        'account_hint'   => 'You will log in to the MiniDash panel with this username and password. It is not your UniFi console account.',
+        'username'       => 'Username',
+        'password'       => 'Password',
+        'password2'      => 'Repeat password',
+        'min6'           => 'Min. 6 characters',
+        'full_name'      => 'Full name',
+        'email'          => 'Email',
+        'save'           => 'Save & continue',
+        'done'           => 'All set',
+        'done_text'      => 'Configuration saved. Log in with the username and password you have just set.',
+        'go_login'       => 'Go to login',
+        'e_username'     => 'Enter a MiniDash username.',
+        'e_password'     => 'The password needs at least 6 characters.',
+        'e_password2'    => 'The passwords do not match.',
+        'e_site'         => 'Invalid Site ID.',
+        'e_write'        => 'Cannot write data/.env - the data/ directory must be writable by the web server.',
+    ],
+];
+function t(string $key, array $params = []): string
+{
+    global $T, $lang;
+    $s = $T[$lang][$key] ?? $key;
+    foreach ($params as $k => $v) $s = str_replace('{' . $k . '}', (string)$v, $s);
+    return $s;
+}
+
 $error = '';
 $success = false;
+$show_skip = false;
+$sites = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $fields = [
-        'UNIFI_CONTROLLER_URL' => trim($_POST['controller_url'] ?? ''),
-        'UNIFI_API_KEY'        => trim($_POST['api_key'] ?? ''),
-        'UNIFI_SITE'           => trim($_POST['site'] ?? 'default'),
-        'ADMIN_USERNAME'       => trim($_POST['admin_username'] ?? ''),
-        'ADMIN_PASSWORD'       => $_POST['admin_password'] ?? '',
-        'ADMIN_FULL_NAME'      => trim($_POST['admin_full_name'] ?? ''),
-        'ADMIN_EMAIL'          => trim($_POST['admin_email'] ?? ''),
-        'DEBUG'                => 'false',
-    ];
     // Znak nowej linii w polu dopisałby do .env własną zmienną (np. drugie ADMIN_PASSWORD)
-    $fields = array_map(fn($v) => str_replace(["\r", "\n"], '', $v), $fields);
+    $clean = fn($v) => str_replace(["\r", "\n"], '', trim((string)$v));
+    $url       = unifi_normalize_url($_POST['controller_url'] ?? '');
+    $api_key   = $clean($_POST['api_key'] ?? '');
+    $site      = $clean($_POST['site'] ?? '') ?: 'default';
+    $username  = $clean($_POST['admin_username'] ?? '');
+    $password  = str_replace(["\r", "\n"], '', (string)($_POST['admin_password'] ?? ''));
+    $password2 = str_replace(["\r", "\n"], '', (string)($_POST['admin_password2'] ?? ''));
 
-    // Validate required fields
-    if (empty($fields['UNIFI_CONTROLLER_URL'])) {
-        $error = 'Controller URL is required';
-    } elseif (empty($fields['UNIFI_API_KEY'])) {
-        $error = 'API Key is required';
-    } elseif (empty($fields['ADMIN_USERNAME'])) {
-        $error = 'Admin username is required';
-    } elseif (empty($fields['ADMIN_PASSWORD'])) {
-        $error = 'Admin password is required';
-    } elseif (strlen($fields['ADMIN_PASSWORD']) < 6) {
-        $error = 'Password must be at least 6 characters';
+    if ($url === '') {
+        $error = t('err_url');
+    } elseif ($api_key === '') {
+        $error = t('err_key');
+    } elseif (!unifi_valid_site($site)) {
+        $error = t('e_site');
+    } elseif ($username === '') {
+        $error = t('e_username');
+    } elseif (strlen($password) < 6) {
+        $error = t('e_password');
+    } elseif (!hash_equals($password, $password2)) {
+        $error = t('e_password2');
     }
 
-    if (empty($error)) {
-        // Build .env content
+    // Test połączenia po stronie serwera - złapie literówkę w kluczu, zanim panel ruszy bez danych
+    if ($error === '' && empty($_POST['skip_check'])) {
+        $probe = unifi_detect_sites($url, $api_key);
+        $sites = $probe['sites'];
+        if ($probe['error']) {
+            $error = t('err_' . $probe['error'], ['detail' => $probe['detail']]);
+            $show_skip = true;
+        } elseif (!in_array($site, array_column($sites, 'id'), true)) {
+            // Nie kliknięto „Sprawdź połączenie" albo wpisany site nie istnieje - bierzemy pierwszy
+            $site = $sites[0]['id'];
+        }
+    }
+
+    if ($error === '') {
+        $fields = [
+            'UNIFI_CONTROLLER_URL' => $url,
+            'UNIFI_API_KEY'        => $api_key,
+            'UNIFI_SITE'           => $site,
+            'ADMIN_USERNAME'       => $username,
+            'ADMIN_PASSWORD'       => $password,
+            'ADMIN_FULL_NAME'      => $clean($_POST['admin_full_name'] ?? ''),
+            'ADMIN_EMAIL'          => $clean($_POST['admin_email'] ?? ''),
+            'DEBUG'                => 'false',
+        ];
+
         $env = "# MiniDash Configuration\n";
         $env .= "# Generated by Setup Wizard on " . date('Y-m-d H:i:s') . "\n\n";
-        $env .= "# UniFi Controller\n";
-        $env .= "UNIFI_CONTROLLER_URL={$fields['UNIFI_CONTROLLER_URL']}\n";
-        $env .= "UNIFI_API_KEY={$fields['UNIFI_API_KEY']}\n";
-        $env .= "UNIFI_SITE={$fields['UNIFI_SITE']}\n\n";
-        $env .= "# Admin credentials\n";
-        $env .= "ADMIN_USERNAME={$fields['ADMIN_USERNAME']}\n";
-        $env .= "ADMIN_PASSWORD={$fields['ADMIN_PASSWORD']}\n";
-        $env .= "ADMIN_FULL_NAME={$fields['ADMIN_FULL_NAME']}\n";
-        $env .= "ADMIN_EMAIL={$fields['ADMIN_EMAIL']}\n\n";
-        $env .= "# Debug mode\n";
-        $env .= "DEBUG=false\n";
+        foreach ($fields as $k => $v) $env .= "$k=$v\n";
 
         // data/.env, nie katalog główny: w Dockerze data/ to wolumen (przetrwa aktualizację),
         // a serwer WWW nie potrzebuje prawa zapisu do katalogu aplikacji
         $dataDir = __DIR__ . '/data';
         $envPath = $dataDir . '/.env';
+        if (!is_dir($dataDir)) @mkdir($dataDir, 0770, true);
 
-        // Ensure data directory exists
-        if (!is_dir($dataDir)) {
-            @mkdir($dataDir, 0770, true);
-        }
-
-        // Write .env
-        if (@file_put_contents($envPath, $env) === false) {
-            $error = 'Cannot write data/.env - check that the data/ directory is writable by the web server';
+        // Najpierw uprawnienia 0600 na pustym pliku, dopiero potem sekrety
+        if (@file_put_contents($envPath, '') === false) {
+            $error = t('e_write');
         } else {
             @chmod($envPath, 0600);
-            // Mark as installed
-            @file_put_contents($dataDir . '/.installed', date('Y-m-d H:i:s'));
-            $success = true;
+            if (@file_put_contents($envPath, $env, LOCK_EX) === false) {
+                $error = t('e_write');
+            } else {
+                @file_put_contents($dataDir . '/.installed', date('Y-m-d H:i:s'));
+                $success = true;
+            }
         }
     }
 }
+
+$h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES);
+$posted_site = $_POST['site'] ?? '';
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= $lang ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -117,19 +231,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
         }
         .setup-input::placeholder { color: #475569; }
+        select.setup-input option { background: #0f172a; }
+        .setup-label { display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.375rem; padding: 0 0.25rem; }
+        .setup-icon { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: #64748b; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-lg">
-        <!-- Logo/Header -->
         <div class="text-center mb-8">
             <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-slate-800/50 mb-4 shadow-xl shadow-blue-500/10 border border-white/10">
                 <img src="img/logo_lm-u.png" alt="MiniDash" class="w-10 h-10 opacity-90">
             </div>
-            <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">
-                MiniDash
-            </h1>
-            <p class="text-slate-500 text-sm mt-2 font-medium tracking-wide uppercase">Initial Setup</p>
+            <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">MiniDash</h1>
+            <p class="text-slate-500 text-sm mt-2 font-medium tracking-wide uppercase"><?= t('subtitle') ?></p>
+            <p class="text-[11px] mt-2 font-bold tracking-widest">
+                <a href="?lang=pl" class="<?= $lang === 'pl' ? 'text-blue-400' : 'text-slate-600 hover:text-slate-300' ?>">PL</a>
+                <span class="text-slate-700 mx-1">/</span>
+                <a href="?lang=en" class="<?= $lang === 'en' ? 'text-blue-400' : 'text-slate-600 hover:text-slate-300' ?>">EN</a>
+            </p>
         </div>
 
         <?php if ($success): ?>
@@ -137,11 +256,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-400">
                     <i data-lucide="check-circle" class="w-10 h-10"></i>
                 </div>
-                <h2 class="text-xl font-bold text-white">Setup Complete</h2>
-                <p class="text-slate-400 text-sm">Configuration saved. You can now log in with your admin credentials.</p>
+                <h2 class="text-xl font-bold text-white"><?= t('done') ?></h2>
+                <p class="text-slate-400 text-sm"><?= t('done_text') ?></p>
                 <a href="login.php"
                    class="inline-flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl transition shadow-xl shadow-blue-600/20">
-                    <span>Go to Login</span>
+                    <span><?= t('go_login') ?></span>
                     <i data-lucide="arrow-right" class="w-4 h-4"></i>
                 </a>
             </div>
@@ -150,116 +269,127 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
 
                 <?php if ($error): ?>
-                    <div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg mb-6 flex items-center gap-3">
+                    <div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg mb-6 flex items-center gap-3 relative z-10">
                         <i data-lucide="alert-circle" class="w-5 h-5 shrink-0"></i>
-                        <span class="text-sm font-medium"><?= htmlspecialchars($error) ?></span>
+                        <span class="text-sm font-medium"><?= $h($error) ?></span>
                     </div>
                 <?php endif; ?>
 
-                <form method="POST" class="space-y-7 relative z-10">
-                    <!-- UniFi Controller Section -->
+                <form method="POST" action="setup.php" class="space-y-7 relative z-10" autocomplete="off">
                     <div class="space-y-4">
                         <h3 class="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
                             <i data-lucide="server" class="w-3.5 h-3.5"></i>
-                            UniFi Controller
+                            <?= t('console') ?>
                         </h3>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1">Controller URL *</label>
+                            <label class="setup-label" for="controllerUrl"><?= t('address') ?> *</label>
                             <div class="relative">
-                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"><i data-lucide="globe" class="w-4 h-4"></i></span>
-                                <input type="url" name="controller_url" required
-                                       class="setup-input"
-                                       placeholder="https://192.168.1.1"
-                                       value="<?= htmlspecialchars($_POST['controller_url'] ?? '') ?>">
+                                <span class="setup-icon"><i data-lucide="router" class="w-4 h-4"></i></span>
+                                <input type="text" name="controller_url" id="controllerUrl" required
+                                       class="setup-input" placeholder="10.0.0.1" inputmode="url" spellcheck="false"
+                                       value="<?= $h($_POST['controller_url'] ?? '') ?>">
                             </div>
+                            <p class="text-[11px] text-slate-600 mt-1 px-1"><?= t('address_hint') ?></p>
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1">API Key *</label>
+                            <label class="setup-label" for="apiKey"><?= t('api_key') ?> *</label>
                             <div class="relative">
-                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"><i data-lucide="key" class="w-4 h-4"></i></span>
-                                <input type="text" name="api_key" required
-                                       class="setup-input"
-                                       placeholder="Your UniFi API key"
-                                       value="<?= htmlspecialchars($_POST['api_key'] ?? '') ?>">
+                                <span class="setup-icon"><i data-lucide="key" class="w-4 h-4"></i></span>
+                                <input type="password" name="api_key" id="apiKey" required
+                                       class="setup-input" style="padding-right: 4.5rem" spellcheck="false" autocomplete="new-password"
+                                       value="<?= $h($_POST['api_key'] ?? '') ?>">
+                                <button type="button" onclick="toggleKey()" class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-500 hover:text-slate-300 uppercase tracking-widest"><?= t('show') ?></button>
                             </div>
-                            <p class="text-[11px] text-slate-600 mt-1 px-1">Settings &rarr; Admins & Users &rarr; API Keys</p>
+                            <p class="text-[11px] text-slate-600 mt-1 px-1"><?= t('api_key_hint') ?></p>
                         </div>
 
+                        <button type="button" id="testBtn" onclick="testConnection()"
+                                class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 hover:bg-indigo-500/25 transition">
+                            <i data-lucide="plug-zap" class="w-4 h-4"></i>
+                            <span><?= t('test') ?></span>
+                        </button>
+                        <p id="testStatus" class="text-xs px-1 hidden"></p>
+
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1">Site ID</label>
-                            <div class="flex gap-2">
-                                <div class="relative flex-1">
-                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"><i data-lucide="layout-grid" class="w-4 h-4"></i></span>
-                                    <input type="text" name="site" id="siteIdField"
-                                           class="setup-input"
-                                           placeholder="default"
-                                           value="<?= htmlspecialchars($_POST['site'] ?? 'default') ?>">
-                                </div>
-                                <button type="button" onclick="detectSite()"
-                                        id="detectBtn"
-                                        style="padding: 0.65rem 1rem; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 0.75rem; color: #818cf8; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s;"
-                                        onmouseover="this.style.background='rgba(99, 102, 241, 0.25)'"
-                                        onmouseout="this.style.background='rgba(99, 102, 241, 0.15)'">
-                                    <i data-lucide="search" class="w-3.5 h-3.5" style="display:inline-block; vertical-align: middle; margin-right: 4px;"></i>
-                                    Detect
-                                </button>
+                            <label class="setup-label" for="siteSelect"><?= t('site') ?></label>
+                            <div class="relative">
+                                <span class="setup-icon"><i data-lucide="layout-grid" class="w-4 h-4"></i></span>
+                                <select name="site" id="siteSelect" class="setup-input">
+                                    <?php if ($sites): foreach ($sites as $s): ?>
+                                        <option value="<?= $h($s['id']) ?>" <?= $s['id'] === $posted_site ? 'selected' : '' ?>><?= $h($s['name']) ?> (<?= $h($s['id']) ?>)</option>
+                                    <?php endforeach; elseif ($posted_site !== '' && $posted_site !== 'default'): ?>
+                                        <option value="<?= $h($posted_site) ?>"><?= $h($posted_site) ?></option>
+                                    <?php else: ?>
+                                        <option value="default">default</option>
+                                    <?php endif; ?>
+                                </select>
                             </div>
-                            <p id="siteHint" class="text-[11px] text-slate-600 mt-1 px-1">Fill Controller URL & API Key first, then click Detect</p>
+                            <p class="text-[11px] text-slate-600 mt-1 px-1"><?= t('site_hint') ?></p>
                         </div>
+
+                        <?php if ($show_skip): ?>
+                            <label class="flex items-start gap-2 text-xs text-amber-300/90 px-1 cursor-pointer">
+                                <input type="checkbox" name="skip_check" value="1" class="mt-0.5 accent-amber-500">
+                                <span><?= t('skip_check') ?></span>
+                            </label>
+                        <?php endif; ?>
                     </div>
 
                     <div class="border-t border-white/5"></div>
 
-                    <!-- Admin Account Section -->
                     <div class="space-y-4">
                         <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
                             <i data-lucide="user-cog" class="w-3.5 h-3.5"></i>
-                            Admin Account
+                            <?= t('account') ?>
                         </h3>
+                        <p class="text-[11px] text-slate-500 px-1 -mt-2"><?= t('account_hint') ?></p>
+
+                        <div>
+                            <label class="setup-label" for="adminUser"><?= t('username') ?> *</label>
+                            <div class="relative">
+                                <span class="setup-icon"><i data-lucide="user" class="w-4 h-4"></i></span>
+                                <input type="text" name="admin_username" id="adminUser" required class="setup-input"
+                                       placeholder="admin" autocomplete="username" spellcheck="false"
+                                       value="<?= $h($_POST['admin_username'] ?? '') ?>">
+                            </div>
+                        </div>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1">Username *</label>
+                                <label class="setup-label" for="adminPass"><?= t('password') ?> *</label>
                                 <div class="relative">
-                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"><i data-lucide="user" class="w-4 h-4"></i></span>
-                                    <input type="text" name="admin_username" required
-                                           class="setup-input"
-                                           placeholder="admin"
-                                           value="<?= htmlspecialchars($_POST['admin_username'] ?? '') ?>">
+                                    <span class="setup-icon"><i data-lucide="lock" class="w-4 h-4"></i></span>
+                                    <input type="password" name="admin_password" id="adminPass" required minlength="6"
+                                           class="setup-input" placeholder="<?= t('min6') ?>" autocomplete="new-password">
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1">Password *</label>
+                                <label class="setup-label" for="adminPass2"><?= t('password2') ?> *</label>
                                 <div class="relative">
-                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"><i data-lucide="lock" class="w-4 h-4"></i></span>
-                                    <input type="password" name="admin_password" required minlength="6"
-                                           class="setup-input"
-                                           placeholder="Min. 6 characters">
+                                    <span class="setup-icon"><i data-lucide="lock-keyhole" class="w-4 h-4"></i></span>
+                                    <input type="password" name="admin_password2" id="adminPass2" required minlength="6"
+                                           class="setup-input" autocomplete="new-password">
                                 </div>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1">Full Name</label>
+                                <label class="setup-label" for="adminName"><?= t('full_name') ?></label>
                                 <div class="relative">
-                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"><i data-lucide="badge-check" class="w-4 h-4"></i></span>
-                                    <input type="text" name="admin_full_name"
-                                           class="setup-input"
-                                           placeholder="John Doe"
-                                           value="<?= htmlspecialchars($_POST['admin_full_name'] ?? '') ?>">
+                                    <span class="setup-icon"><i data-lucide="badge-check" class="w-4 h-4"></i></span>
+                                    <input type="text" name="admin_full_name" id="adminName" class="setup-input"
+                                           value="<?= $h($_POST['admin_full_name'] ?? '') ?>">
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1">Email</label>
+                                <label class="setup-label" for="adminEmail"><?= t('email') ?></label>
                                 <div class="relative">
-                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"><i data-lucide="mail" class="w-4 h-4"></i></span>
-                                    <input type="email" name="admin_email"
-                                           class="setup-input"
-                                           placeholder="admin@example.com"
-                                           value="<?= htmlspecialchars($_POST['admin_email'] ?? '') ?>">
+                                    <span class="setup-icon"><i data-lucide="mail" class="w-4 h-4"></i></span>
+                                    <input type="email" name="admin_email" id="adminEmail" class="setup-input"
+                                           value="<?= $h($_POST['admin_email'] ?? '') ?>">
                                 </div>
                             </div>
                         </div>
@@ -268,7 +398,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <button type="submit"
                             class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl transition shadow-xl shadow-blue-600/20 group flex items-center justify-center gap-2">
                         <i data-lucide="save" class="w-4 h-4"></i>
-                        <span>Save & Continue</span>
+                        <span><?= t('save') ?></span>
                         <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition"></i>
                     </button>
                 </form>
@@ -276,73 +406,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
 
         <footer class="mt-12 text-center text-slate-500 text-[11px] uppercase tracking-[0.3em] font-medium">
-            <a href="https://www.lm-networks.pl" target="_blank" class="hover:text-slate-300 transition">LM-Networks</a> &copy; 2025-2026
+            <a href="https://www.lm-networks.pl" target="_blank" rel="noopener" class="hover:text-slate-300 transition">LM-Networks</a> &copy; 2025-2026
         </footer>
     </div>
 
     <script>
     lucide.createIcons();
+    const L = <?= json_encode($T[$lang], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
+    const fmt = (s, p) => s.replace(/\{(\w+)\}/g, (_, k) => p[k] ?? '');
 
-    function detectSite() {
-        const url = document.querySelector('input[name="controller_url"]').value.trim();
-        const key = document.querySelector('input[name="api_key"]').value.trim();
-        const hint = document.getElementById('siteHint');
-        const btn = document.getElementById('detectBtn');
-        const field = document.getElementById('siteIdField');
+    function toggleKey() {
+        const f = document.getElementById('apiKey');
+        f.type = f.type === 'password' ? 'text' : 'password';
+    }
 
-        if (!url || !key) {
-            hint.textContent = 'Fill Controller URL & API Key first';
-            hint.style.color = '#ef4444';
-            return;
-        }
+    function setStatus(text, color) {
+        const st = document.getElementById('testStatus');
+        st.textContent = text;
+        st.style.color = color;
+        st.classList.remove('hidden');
+    }
 
+    async function testConnection() {
+        const url = document.getElementById('controllerUrl').value.trim();
+        const key = document.getElementById('apiKey').value.trim();
+        if (!url) return setStatus(L.err_url, '#ef4444');
+        if (!key) return setStatus(L.err_key, '#ef4444');
+
+        const btn = document.getElementById('testBtn');
         btn.disabled = true;
         btn.style.opacity = '0.5';
-        hint.textContent = 'Detecting...';
-        hint.style.color = '#818cf8';
+        setStatus(L.testing, '#818cf8');
 
-        const body = new FormData();
-        body.append('controller_url', url);
-        body.append('api_key', key);
+        try {
+            const body = new FormData();
+            body.append('controller_url', url);
+            body.append('api_key', key);
+            const data = await (await fetch('api_detect_site.php', { method: 'POST', body })).json();
 
-        fetch('api_detect_site.php', { method: 'POST', body })
-            .then(r => r.json())
-            .then(data => {
-                btn.disabled = false;
-                btn.style.opacity = '1';
+            if (data.error || !data.sites || !data.sites.length) {
+                setStatus(fmt(L['err_' + data.error] || L.err_fetch, { detail: data.detail || '' }), '#ef4444');
+                return;
+            }
+            if (data.controller_url) document.getElementById('controllerUrl').value = data.controller_url;
 
-                if (data.error && (!data.sites || data.sites.length === 0)) {
-                    hint.textContent = data.error;
-                    hint.style.color = '#ef4444';
-                    return;
-                }
-
-                if (data.sites && data.sites.length > 0) {
-                    const site = data.sites[0];
-                    field.value = site.id;
-                    hint.style.color = '#10b981';
-
-                    if (data.sites.length === 1) {
-                        hint.textContent = 'Found: ' + site.name + ' (' + site.id + ')';
-                    } else {
-                        hint.innerHTML = 'Found ' + data.sites.length + ' sites: ' +
-                            data.sites.map(s =>
-                                '<a href="#" style="color:#818cf8;text-decoration:underline" onclick="event.preventDefault();document.getElementById(\'siteIdField\').value=\'' + s.id + '\';this.parentElement.querySelector(\'.active\')?.classList.remove(\'active\');this.classList.add(\'active\')">' +
-                                s.name + '</a>'
-                            ).join(' | ');
-                    }
-                } else {
-                    field.value = 'default';
-                    hint.textContent = 'No sites found — using "default"';
-                    hint.style.color = '#f59e0b';
-                }
-            })
-            .catch(() => {
-                btn.disabled = false;
-                btn.style.opacity = '1';
-                hint.textContent = 'Connection failed';
-                hint.style.color = '#ef4444';
-            });
+            const sel = document.getElementById('siteSelect');
+            sel.innerHTML = '';
+            data.sites.forEach(s => sel.add(new Option(s.name + ' (' + s.id + ')', s.id)));
+            setStatus(data.sites.length === 1
+                ? fmt(L.found_one, { name: data.sites[0].name })
+                : fmt(L.found_many, { n: data.sites.length }), '#10b981');
+        } catch (e) {
+            setStatus(L.err_fetch, '#ef4444');
+        } finally {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        }
     }
     </script>
 </body>

@@ -46,13 +46,15 @@ http://your-server-ip:8080
 
 The **Setup Wizard** will appear automatically on first run. Fill in:
 
-- **Controller URL** — your UniFi Controller address (e.g. `https://192.168.1.1`)
-- **API Key** — from UniFi Controller (see above)
-- **Site ID** — usually `default`
-- **Admin username & password** — your login credentials for MiniDash
-- **Name & email** — displayed in your profile
+- **Console IP address** - just the address of your UniFi console (e.g. `192.168.1.1`); `https://` is added for you
+- **API Key** - from the console (see above)
+- Click **Test connection** - MiniDash checks the address and the key and fills in the **Site** list
+- **MiniDash username & password** - your login for the MiniDash panel (not your UniFi account)
+- **Name & email** - displayed in your profile
 
-Click **Save & Continue** — done!
+Click **Save & continue** - done! The wizard tests the connection once more before saving. If the console is unreachable at that moment, you can tick *Save without checking*.
+
+To change the console address, API key or site later, open the user menu → **UniFi console**. The username and password are changed in the user menu → **Personal**.
 
 The configuration is saved in the `data` volume, so it survives container rebuilds and updates. The container also runs the background jobs (alerts, daily report, WAN and client statistics) by itself - no cron needed.
 
@@ -63,14 +65,7 @@ echo "MINIDASH_PORT=3000" > .env
 docker compose up -d
 ```
 
-**Optional: skip the Setup Wizard.** Put your settings in the same `.env` file before the first start. `UNIFI_API_KEY` and `ADMIN_PASSWORD` (at least 6 characters) are required; they are used only on the first start:
-
-```bash
-UNIFI_CONTROLLER_URL=https://192.168.1.1
-UNIFI_API_KEY=your-api-key
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=choose-a-strong-password
-```
+**Optional: skip the Setup Wizard (automated deployments).** Add an `environment:` section to the service in `docker-compose.yml` with `UNIFI_CONTROLLER_URL`, `UNIFI_API_KEY`, `UNIFI_SITE`, `ADMIN_USERNAME` and `ADMIN_PASSWORD` (at least 6 characters). They are used only on the first start. Keep in mind that environment variables stay visible in the container settings (Synology Container Manager, `docker inspect`) for anyone with access to Docker - the Setup Wizard does not leave them there, so it is the recommended way.
 
 ### Updating
 

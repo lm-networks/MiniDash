@@ -3373,6 +3373,10 @@ function render_nav($title = "MiniDash", $stats = []) {
                                 <i data-lucide="info" class="w-4 h-4 text-amber-400/80"></i>
                                 <?= __('nav.about_system') ?>
                             </button>
+                            <a href="console_settings.php" class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition">
+                                <i data-lucide="server-cog" class="w-4 h-4 text-indigo-400/80"></i>
+                                <?= __('nav.console_settings') ?>
+                            </a>
                             <a href="devices.php" class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition">
                                 <i data-lucide="settings" class="w-4 h-4 text-blue-400/80"></i>
                                 <?= __('nav.system_settings') ?>

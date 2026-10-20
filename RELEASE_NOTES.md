@@ -1,5 +1,33 @@
 # MiniDash — Release Notes
 
+## v2.9.0 (2026-10-20)
+
+Nowy kreator instalacji i strona „Konsola UniFi" w panelu. Docker nie przekazuje już klucza API ani hasła admina przez zmienne środowiskowe.
+
+### Kreator instalacji (`setup.php`)
+- Po polsku i angielsku (przełącznik PL/EN, domyślnie język przeglądarki)
+- Wystarczy sam adres IP konsoli, np. `10.0.0.1` - `https://` dopisuje się samo, port jest zachowany
+- Przycisk „Sprawdź połączenie": test adresu i klucza API, lista site'ów do wyboru. Komunikaty rozróżniają brak połączenia i odrzucony klucz
+- Przed zapisem kreator sprawdza połączenie jeszcze raz; gdy konsola jest akurat niedostępna, można zaznaczyć „Zapisz bez sprawdzania"
+- Pole „Powtórz hasło"; jasny podpis, że login i hasło są do MiniDash, nie do konsoli UniFi
+- `data/.env` dostaje uprawnienia 0600, zanim trafią do niego sekrety
+
+### Konsola UniFi (`console_settings.php`, menu użytkownika)
+- Zmiana adresu konsoli, klucza API i site'u bez edycji plików i bez przebudowy kontenera
+- Puste pole klucza = zostaje zapisany (widać jego 4 ostatnie znaki)
+- Test połączenia i wybór site'u jak w kreatorze; zapis wymaga hasła do MiniDash
+- Zapis do `data/config.json` (klucz szyfrowany, jak pozostałe sekrety), ma pierwszeństwo przed `.env`; po zmianie czyszczony jest cache odpowiedzi API
+
+### Docker
+- `docker-compose.yml` bez sekcji `environment` z kluczem API i hasłem - zmienne środowiskowe są widoczne w Container Managerze i `docker inspect`. Konfiguracja tylko przez kreator; pominięcie kreatora nadal możliwe po ręcznym dopisaniu `environment:` (opis w `docs/INSTALL.md`)
+
+### Wspólne
+- `includes/unifi_probe.php`: normalizacja adresu, test połączenia, lista site'ów (kreator, strona konsoli, `api_detect_site.php`)
+- `api_detect_site.php` po instalacji działa dla zalogowanego admina z tokenem CSRF (wcześniej 403 dla wszystkich)
+- Nowe klucze tłumaczeń PL/EN (`console_cfg.*`, `nav.console_settings`)
+
+---
+
 ## v2.8.2 (2026-10-06)
 
 Poprawka: karta „Krytyczne" w Threat Watch pokazywała samą liczbę zdarzeń wysokiego ryzyka, bez informacji czy zostały zablokowane i czego dotyczyły. „3 krytyczne" wyglądało jak aktywne zagrożenie, nawet gdy IPS zablokował wszystkie ataki.
