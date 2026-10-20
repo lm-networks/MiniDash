@@ -20,6 +20,10 @@ Nowy kreator instalacji i strona „Konsola UniFi" w panelu. Docker nie przekazu
 - Test połączenia i wybór site'u jak w kreatorze; zapis wymaga hasła do MiniDash
 - Zapis do `data/config.json` (klucz szyfrowany, jak pozostałe sekrety), ma pierwszeństwo przed `.env`; po zmianie czyszczony jest cache odpowiedzi API
 
+### Bezpieczeństwo konfiguracji
+- „Ustawienia systemu" (`devices.php`): sekcja połączenia z kontrolerem tylko do podglądu, z przyciskiem do strony „Konsola UniFi". Dawny zapis (`save_config`) wrzucał do `data/config.json` całą odszyfrowaną konfigurację - klucz API, hasło admina, tokeny - jawnym tekstem, a klucz API był w źródle strony
+- Zapis hostów do pingowania i zapis w `settings_notifications.php` szyfrują sekrety (wcześniej klucz API, hasło i token Telegrama/SMTP mogły trafić do pliku jawnie)
+
 ### Docker
 - `docker-compose.yml` bez sekcji `environment` z kluczem API i hasłem - zmienne środowiskowe są widoczne w Container Managerze i `docker inspect`. Konfiguracja tylko przez kreator; pominięcie kreatora nadal możliwe po ręcznym dopisaniu `environment:` (opis w `docs/INSTALL.md`)
 

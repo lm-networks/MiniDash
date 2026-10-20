@@ -45,34 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    // Akcja: Zapis konfiguracji
-    if (isset($_POST['action']) && $_POST['action'] === 'save_config') {
-        // Wczytaj obecną konfigurację do scalenia
-        $currentConfig = $config; // $config jest już załadowany w config.php
-        
-        $newConfig = $currentConfig;
-        
-        // Aktualizuj tylko to, co przyszło w POST
-        if (isset($_POST['controller_url'])) $newConfig['controller_url'] = $_POST['controller_url'];
-        if (isset($_POST['api_key'])) $newConfig['api_key'] = $_POST['api_key'];
-        if (isset($_POST['site'])) $newConfig['site'] = $_POST['site'];
-        
-        if (isset($_POST['email_notifications_update'])) {
-            $newConfig['email_notifications']['enabled'] = isset($_POST['email_enabled']);
-        }
-        
-        if (isset($_POST['telegram_notifications_update'])) {
-            $newConfig['telegram_notifications']['enabled'] = isset($_POST['tg_enabled']);
-        }
-
-        // Zapisz do pliku JSON
-        if (!is_dir(__DIR__ . '/data')) mkdir(__DIR__ . '/data', 0777, true);
-        file_put_contents(__DIR__ . '/data/config.json', json_encode($newConfig, JSON_PRETTY_PRINT));
-        
-        $_SESSION['success'] = __('settings.saved_successfully');
-        header('Location: devices.php');
-        exit;
-    }
+    // Adres konsoli, klucz API i site zapisuje console_settings.php (dawne save_config zapisywało
+    // odszyfrowaną konfigurację, z kluczem i hasłem, jawnym tekstem do config.json)
 
     // Akcja: Zapis Hostów Ping
     if (isset($_POST['action']) && $_POST['action'] === 'save_ping_hosts') {
@@ -91,6 +65,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $currentConfig['ping_hosts'] = $newHosts;
 
         if (!is_dir(__DIR__ . '/data')) mkdir(__DIR__ . '/data', 0777, true);
+        // $config jest odszyfrowany - bez tego klucz API, hasło i tokeny trafiłyby do pliku jawnie
+        encrypt_config($currentConfig);
         file_put_contents(__DIR__ . '/data/config.json', json_encode($currentConfig, JSON_PRETTY_PRINT));
 
         $_SESSION['success'] = __('settings.ping_hosts_saved');
@@ -270,8 +246,8 @@ foreach ($db_tables as $t) {
             <div class="glass-card p-8 flex flex-col w-full h-full border-blue-500/20 shadow-[0_0_40px_rgba(59,130,246,0.1)] relative overflow-hidden group">
                 <div class="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 blur-3xl -mr-16 -mt-16 group-hover:bg-blue-600/10 transition-all duration-700"></div>
                 
-                <form method="POST" class="flex flex-col h-full relative z-10">
-                    <input type="hidden" name="action" value="save_config">
+                <?php // Edycja połączenia jest w console_settings.php (test klucza, szyfrowany zapis); tu tylko podgląd ?>
+                <div class="flex flex-col h-full relative z-10">
                     <div class="flex items-center justify-between mb-8">
                         <div>
                             <h2 class="text-lg font-black uppercase tracking-[0.2em] text-blue-400 flex items-center gap-3">
@@ -289,29 +265,26 @@ foreach ($db_tables as $t) {
                     <div class="space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="md:col-span-2">
-                                <label class="block text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Controller URL</label>
-                                <input type="text" name="controller_url" value="<?= htmlspecialchars($config['controller_url']) ?>" required
-                                    class="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-xs font-mono transition-all">
+                                <div class="block text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Controller URL</div>
+                                <div class="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-xs font-mono text-slate-300 break-all"><?= htmlspecialchars($config['controller_url']) ?></div>
                             </div>
                             <div>
-                                <label class="block text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Site ID</label>
-                                <input type="text" name="site" value="<?= htmlspecialchars($config['site']) ?>" required
-                                    class="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-xs font-mono transition-all">
+                                <div class="block text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Site ID</div>
+                                <div class="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-xs font-mono text-slate-300 break-all"><?= htmlspecialchars($config['site']) ?></div>
                             </div>
                             <div>
-                                <label class="block text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">API Key</label>
-                                <input type="password" name="api_key" value="<?= htmlspecialchars($config['api_key']) ?>"
-                                    class="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-xs font-mono transition-all">
+                                <div class="block text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">API Key</div>
+                                <div class="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-xs font-mono text-slate-300"><?= $config['api_key'] !== '' ? '••••••••' . htmlspecialchars(substr($config['api_key'], -4)) : '-' ?></div>
                             </div>
                         </div>
-                        
+
                         <div class="pt-4">
-                             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition shadow-xl shadow-blue-600/20 text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3">
-                                <i data-lucide="refresh-cw" class="w-4 h-4"></i> <?= __('settings.update_config') ?>
-                             </button>
+                             <a href="console_settings.php" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition shadow-xl shadow-blue-600/20 text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3">
+                                <i data-lucide="server-cog" class="w-4 h-4"></i> <?= __('nav.console_settings') ?>
+                             </a>
                         </div>
                     </div>
-                </form>
+                </div>
             </div>
         <!-- Karta 2: Monitoringu Ping -->
             <div class="glass-card p-8 flex flex-col w-full h-full border-purple-500/20 shadow-[0_0_40px_rgba(168,85,247,0.1)] relative overflow-hidden group">

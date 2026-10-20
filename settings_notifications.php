@@ -53,6 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_array($existing)) $existing = [];
     
     $finalConfig = array_replace_recursive($existing, $newConfig);
+    // Hasło SMTP i tokeny z formularza przychodzą jawnie - jak w api_save_settings.php
+    encrypt_config($finalConfig);
     
     if (file_put_contents($configFile, json_encode($finalConfig, JSON_PRETTY_PRINT))) {
         $status = "success";
