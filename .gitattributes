@@ -3,3 +3,6 @@
 Dockerfile text eol=lf
 docker/* text eol=lf
 docker-compose.yml text eol=lf
+
+# Hash commita wpisywany przez git archive / paczke ZIP z GitHuba (stopka panelu)
+REVISION export-subst

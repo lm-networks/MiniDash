@@ -1,4 +1,8 @@
+# Z .git tylko to, z czego stopka czyta hash commita
 .git
+!.git/HEAD
+!.git/refs
+!.git/packed-refs
 .env
 _old/
 KOPIA/
@@ -19,3 +23,5 @@ logs/*
 docs/
 *.md
 !README.md
+# Log zmian w stopce panelu
+!RELEASE_NOTES.md

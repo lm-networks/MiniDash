@@ -8,10 +8,19 @@ if (is_dir($git_dir)) {
     if ($head && str_starts_with(trim($head), 'ref: ')) {
         $ref = trim(substr(trim($head), 5));
         $hash = @file_get_contents($git_dir . '/' . $ref);
+        // Po `git gc` gałąź siedzi w packed-refs, a nie w osobnym pliku
+        if (!$hash && preg_match('/^([0-9a-f]{40}) ' . preg_quote($ref, '/') . '$/m', (string)@file_get_contents($git_dir . '/packed-refs'), $m)) {
+            $hash = $m[1];
+        }
         if ($hash) $git_hash = substr(trim($hash), 0, 7);
     } elseif ($head) {
         $git_hash = substr(trim($head), 0, 7);
     }
+}
+// Bez .git (paczka ZIP z GitHuba, `git archive`): hash wpisany przez git do REVISION (export-subst)
+if ($git_hash === '') {
+    $rev = trim((string)@file_get_contents(__DIR__ . '/../REVISION'));
+    if (preg_match('/^[0-9a-f]{7,40}$/', $rev)) $git_hash = substr($rev, 0, 7);
 }
 
 // Read changelog from RELEASE_NOTES.md
