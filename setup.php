@@ -40,12 +40,12 @@ $T = [
         'address'        => 'Adres IP konsoli',
         'address_hint'   => 'UDR, UDM, UCG albo Cloud Key. Wystarczy sam adres, https:// dopiszę.',
         'api_key'        => 'Klucz API',
-        'api_key_hint'   => 'W konsoli: Settings → Admins & Users → API Keys → Create API Key',
+        'api_key_hint'   => 'W aplikacji UniFi Network na konsoli: Settings → Control Plane → Integrations → Create API Key. Klucz z unifi.ui.com nie zadziała.',
         'show'           => 'Pokaż',
         'test'           => 'Sprawdź połączenie',
         'testing'        => 'Łączę z konsolą...',
         'site'           => 'Site',
-        'site_hint'      => 'Uzupełni się po sprawdzeniu połączenia.',
+        'site_hint'      => 'Uzupełni się po sprawdzeniu połączenia. Możesz też wpisać ręcznie: UUID site\'u albo default.',
         'found_one'      => 'Połączono. Site: {name}',
         'found_many'     => 'Połączono. Znalezione site\'y: {n} - wybierz właściwy.',
         'err_url'        => 'Niepoprawny adres konsoli. Wpisz np. 10.0.0.1',
@@ -79,12 +79,12 @@ $T = [
         'address'        => 'Console IP address',
         'address_hint'   => 'UDR, UDM, UCG or Cloud Key. The address alone is enough, https:// is added for you.',
         'api_key'        => 'API key',
-        'api_key_hint'   => 'On the console: Settings → Admins & Users → API Keys → Create API Key',
+        'api_key_hint'   => 'In the UniFi Network app on the console: Settings → Control Plane → Integrations → Create API Key. A key from unifi.ui.com will not work.',
         'show'           => 'Show',
         'test'           => 'Test connection',
         'testing'        => 'Connecting to the console...',
         'site'           => 'Site',
-        'site_hint'      => 'Filled in after the connection test.',
+        'site_hint'      => 'Filled in after the connection test. You can also type it: the site UUID or default.',
         'found_one'      => 'Connected. Site: {name}',
         'found_many'     => 'Connected. Sites found: {n} - pick the right one.',
         'err_url'        => 'Invalid console address. Enter e.g. 10.0.0.1',
@@ -150,14 +150,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = t('e_password2');
     }
 
-    // Test połączenia po stronie serwera - złapie literówkę w kluczu, zanim panel ruszy bez danych
-    if ($error === '' && empty($_POST['skip_check'])) {
+    // Test połączenia po stronie serwera - złapie literówkę w kluczu, zanim panel ruszy bez danych.
+    // Pominąć go można tylko przy braku połączenia (konsola chwilowo offline) - odrzucony klucz
+    // i tak nic nie pobierze.
+    if ($error === '') {
         $probe = unifi_detect_sites($url, $api_key);
         $sites = $probe['sites'];
-        if ($probe['error']) {
+        $skippable = $probe['error'] === 'connect';
+        if ($probe['error'] && !($skippable && !empty($_POST['skip_check']))) {
             $error = t('err_' . $probe['error'], ['detail' => $probe['detail']]);
-            $show_skip = true;
-        } elseif (!in_array($site, array_column($sites, 'id'), true)) {
+            $show_skip = $skippable;
+        } elseif ($sites && !in_array($site, array_column($sites, 'id'), true)) {
             // Nie kliknięto „Sprawdź połączenie" albo wpisany site nie istnieje - bierzemy pierwszy
             $site = $sites[0]['id'];
         }
@@ -313,18 +316,18 @@ $posted_site = $_POST['site'] ?? '';
                         <p id="testStatus" class="text-xs px-1 hidden"></p>
 
                         <div>
-                            <label class="setup-label" for="siteSelect"><?= t('site') ?></label>
+                            <label class="setup-label" for="siteInput"><?= t('site') ?></label>
                             <div class="relative">
                                 <span class="setup-icon"><i data-lucide="layout-grid" class="w-4 h-4"></i></span>
-                                <select name="site" id="siteSelect" class="setup-input">
-                                    <?php if ($sites): foreach ($sites as $s): ?>
-                                        <option value="<?= $h($s['id']) ?>" <?= $s['id'] === $posted_site ? 'selected' : '' ?>><?= $h($s['name']) ?> (<?= $h($s['id']) ?>)</option>
-                                    <?php endforeach; elseif ($posted_site !== '' && $posted_site !== 'default'): ?>
-                                        <option value="<?= $h($posted_site) ?>"><?= $h($posted_site) ?></option>
-                                    <?php else: ?>
-                                        <option value="default">default</option>
-                                    <?php endif; ?>
-                                </select>
+                                <!-- Pole tekstowe z podpowiedziami: lista z testu połączenia albo wpis ręczny -->
+                                <input type="text" name="site" id="siteInput" list="siteList" class="setup-input"
+                                       placeholder="default" spellcheck="false"
+                                       value="<?= $h($posted_site !== '' ? $posted_site : ($sites[0]['id'] ?? 'default')) ?>">
+                                <datalist id="siteList">
+                                    <?php foreach ($sites as $s): ?>
+                                        <option value="<?= $h($s['id']) ?>"><?= $h($s['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </datalist>
                             </div>
                             <p class="text-[11px] text-slate-600 mt-1 px-1"><?= t('site_hint') ?></p>
                         </div>
@@ -450,9 +453,11 @@ $posted_site = $_POST['site'] ?? '';
             }
             if (data.controller_url) document.getElementById('controllerUrl').value = data.controller_url;
 
-            const sel = document.getElementById('siteSelect');
-            sel.innerHTML = '';
-            data.sites.forEach(s => sel.add(new Option(s.name + ' (' + s.id + ')', s.id)));
+            const input = document.getElementById('siteInput');
+            const list = document.getElementById('siteList');
+            list.innerHTML = '';
+            data.sites.forEach(s => list.append(new Option(s.name, s.id)));
+            if (!data.sites.some(s => s.id === input.value)) input.value = data.sites[0].id;
             setStatus(data.sites.length === 1
                 ? fmt(L.found_one, { name: data.sites[0].name })
                 : fmt(L.found_many, { n: data.sites.length }), '#10b981');

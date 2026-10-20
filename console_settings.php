@@ -45,13 +45,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = __('console_cfg.e_site');
     }
 
-    if ($error === '' && empty($_POST['skip_check'])) {
+    // Pominąć test można tylko przy braku połączenia - odrzucony klucz i tak nic nie pobierze
+    if ($error === '') {
         $probe = unifi_detect_sites($url, $key);
         $sites = $probe['sites'];
-        if ($probe['error']) {
+        $skippable = $probe['error'] === 'connect';
+        if ($probe['error'] && !($skippable && !empty($_POST['skip_check']))) {
             $error = __('console_cfg.err_' . $probe['error'], ['detail' => $probe['detail']]);
-            $show_skip = true;
-        } elseif (!in_array($site, array_column($sites, 'id'), true)) {
+            $show_skip = $skippable;
+        } elseif ($sites && !in_array($site, array_column($sites, 'id'), true)) {
             $site = $sites[0]['id'];
         }
     }
@@ -183,16 +185,17 @@ $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES);
             </div>
 
             <div>
-                <label class="cfg-label" for="siteSelect"><?= __('console_cfg.site') ?></label>
+                <label class="cfg-label" for="siteInput"><?= __('console_cfg.site') ?></label>
                 <div class="relative">
                     <span class="cfg-icon"><i data-lucide="layout-grid" class="w-4 h-4"></i></span>
-                    <select name="site" id="siteSelect" class="cfg-input">
-                        <?php if ($sites): foreach ($sites as $s): ?>
-                            <option value="<?= $h($s['id']) ?>" <?= $s['id'] === $form['site'] ? 'selected' : '' ?>><?= $h($s['name']) ?> (<?= $h($s['id']) ?>)</option>
-                        <?php endforeach; else: ?>
-                            <option value="<?= $h($form['site']) ?>"><?= $h($form['site']) ?></option>
-                        <?php endif; ?>
-                    </select>
+                    <!-- Pole tekstowe z podpowiedziami: lista z testu połączenia albo wpis ręczny -->
+                    <input type="text" name="site" id="siteInput" list="siteList" class="cfg-input"
+                           placeholder="default" spellcheck="false" value="<?= $h($form['site']) ?>">
+                    <datalist id="siteList">
+                        <?php foreach ($sites as $s): ?>
+                            <option value="<?= $h($s['id']) ?>"><?= $h($s['name']) ?></option>
+                        <?php endforeach; ?>
+                    </datalist>
                 </div>
                 <p class="text-[11px] text-slate-600 mt-1 px-1"><?= __('console_cfg.site_hint') ?></p>
             </div>
@@ -279,10 +282,11 @@ $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES);
             }
             if (data.controller_url) document.getElementById('controllerUrl').value = data.controller_url;
 
-            const sel = document.getElementById('siteSelect');
-            const current = sel.value;
-            sel.innerHTML = '';
-            data.sites.forEach(s => sel.add(new Option(s.name + ' (' + s.id + ')', s.id, false, s.id === current)));
+            const input = document.getElementById('siteInput');
+            const list = document.getElementById('siteList');
+            list.innerHTML = '';
+            data.sites.forEach(s => list.append(new Option(s.name, s.id)));
+            if (!data.sites.some(s => s.id === input.value)) input.value = data.sites[0].id;
             setStatus(data.sites.length === 1
                 ? fmt(L.found_one, { name: data.sites[0].name })
                 : fmt(L.found_many, { n: data.sites.length }), '#10b981');

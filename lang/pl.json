@@ -854,7 +854,7 @@
         "address": "Adres IP konsoli",
         "address_hint": "UDR, UDM, UCG albo Cloud Key. Wystarczy sam adres, https:// dopiszę.",
         "api_key": "Klucz API",
-        "api_key_hint": "W konsoli: Settings → Admins & Users → API Keys → Create API Key",
+        "api_key_hint": "W aplikacji UniFi Network na konsoli: Settings → Control Plane → Integrations → Create API Key. Klucz z unifi.ui.com nie zadziała.",
         "api_key_keep": "Zapisany klucz kończy się na {last4}. Zostaw pole puste, żeby go nie zmieniać.",
         "show": "Pokaż",
         "test": "Sprawdź połączenie",

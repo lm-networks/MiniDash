@@ -8,8 +8,10 @@ Nowy kreator instalacji i strona „Konsola UniFi" w panelu. Docker nie przekazu
 - Po polsku i angielsku (przełącznik PL/EN, domyślnie język przeglądarki)
 - Wystarczy sam adres IP konsoli, np. `10.0.0.1` - `https://` dopisuje się samo, port jest zachowany
 - Przycisk „Sprawdź połączenie": test adresu i klucza API, lista site'ów do wyboru. Komunikaty rozróżniają brak połączenia i odrzucony klucz
-- Przed zapisem kreator sprawdza połączenie jeszcze raz; gdy konsola jest akurat niedostępna, można zaznaczyć „Zapisz bez sprawdzania"
+- Przed zapisem kreator sprawdza połączenie jeszcze raz. „Zapisz bez sprawdzania" jest dostępne tylko przy braku połączenia z konsolą; odrzuconego klucza (401) nie da się zapisać
 - Pole „Powtórz hasło"; jasny podpis, że login i hasło są do MiniDash, nie do konsoli UniFi
+- Site jako pole tekstowe z podpowiedziami: lista z testu połączenia albo wpis ręczny (wcześniej listę wypełniał tylko udany test)
+- Poprawiona podpowiedź, skąd wziąć klucz API: aplikacja UniFi Network → Settings → Control Plane → Integrations (nie Admins & Users, nie unifi.ui.com); to samo w `docs/INSTALL.md`
 - `data/.env` dostaje uprawnienia 0600, zanim trafią do niego sekrety
 
 ### Konsola UniFi (`console_settings.php`, menu użytkownika)

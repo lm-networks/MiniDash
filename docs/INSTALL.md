@@ -9,11 +9,11 @@
 
 ### Getting a UniFi API Key
 
-1. Log into your UniFi Controller
-2. Go to **Settings > Admins & Users > API Keys**
-3. Click **Create API Key**
+1. Open the **UniFi Network** app on your console, locally (e.g. `https://192.168.1.1`)
+2. Go to **Settings > Control Plane > Integrations** (on older Network versions look for API settings under Control Plane or Advanced)
+3. Enter a name, optionally an expiry, and click **Create API Key**
 4. Choose permissions: **Read-Only** is enough for monitoring. Toggling access-control objects and firewall rules from MiniDash needs a key with write access
-5. Copy the key — you'll need it during setup
+5. Copy the key - it is shown only once. A Site Manager key from unifi.ui.com will not work: MiniDash talks to the console directly
 
 ---
 
