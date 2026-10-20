@@ -170,9 +170,10 @@ $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES);
                            placeholder="<?= $saved_key !== '' ? '••••••••' . $h(substr($saved_key, -4)) : '' ?>">
                     <button type="button" onclick="toggleKey()" class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-500 hover:text-slate-300 uppercase tracking-widest"><?= __('console_cfg.show') ?></button>
                 </div>
-                <p class="text-[11px] text-slate-600 mt-1 px-1">
-                    <?= $saved_key !== '' ? __('console_cfg.api_key_keep', ['last4' => $h(substr($saved_key, -4))]) : __('console_cfg.api_key_hint') ?>
-                </p>
+                <?php if ($saved_key !== ''): ?>
+                <p class="text-[11px] text-slate-600 mt-1 px-1"><?= __('console_cfg.api_key_keep', ['last4' => $h(substr($saved_key, -4))]) ?></p>
+                <?php endif; ?>
+                <p class="text-[11px] text-slate-500 mt-1 px-1"><?= __('console_cfg.api_key_hint') ?></p>
             </div>
 
             <div>

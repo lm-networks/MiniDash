@@ -854,7 +854,7 @@
         "address": "Console IP address",
         "address_hint": "UDR, UDM, UCG or Cloud Key. The address alone is enough, https:// is added for you.",
         "api_key": "API key",
-        "api_key_hint": "In the UniFi Network app on the console: Settings → Control Plane → Integrations → Create API Key. A key from unifi.ui.com will not work.",
+        "api_key_hint": "A local key from the UniFi Network app on the console: Settings → Control Plane → Integrations → Create API Key. A key from unifi.ui.com (Site Manager) will not work, the console rejects it with error 401.",
         "api_key_keep": "The saved key ends with {last4}. Leave the field empty to keep it.",
         "show": "Show",
         "test": "Test connection",

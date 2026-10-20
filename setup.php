@@ -40,7 +40,12 @@ $T = [
         'address'        => 'Adres IP konsoli',
         'address_hint'   => 'UDR, UDM, UCG albo Cloud Key. Wystarczy sam adres, https:// dopiszę.',
         'api_key'        => 'Klucz API',
-        'api_key_hint'   => 'W aplikacji UniFi Network na konsoli: Settings → Control Plane → Integrations → Create API Key. Klucz z unifi.ui.com nie zadziała.',
+        'api_key_hint'   => 'Klucz lokalny z aplikacji UniFi Network na konsoli. Klucz z unifi.ui.com nie zadziała.',
+        'key_help'       => 'Skąd wziąć klucz API?',
+        'key_help_1'     => 'Wejdź na konsolę pod jej lokalnym adresem (tym, który wpisujesz wyżej) i otwórz aplikację Network.',
+        'key_help_2'     => 'Settings → Control Plane → Integrations → Create API Key. Nazwa dowolna, np. MiniDash.',
+        'key_help_3'     => 'Skopiuj klucz od razu, bo konsola pokazuje go tylko raz.',
+        'key_help_warn'  => 'Klucze z unifi.ui.com (Site Manager → API Keys) służą do chmury Ubiquiti. Konsola odrzuci je błędem 401.',
         'show'           => 'Pokaż',
         'test'           => 'Sprawdź połączenie',
         'testing'        => 'Łączę z konsolą...',
@@ -79,7 +84,12 @@ $T = [
         'address'        => 'Console IP address',
         'address_hint'   => 'UDR, UDM, UCG or Cloud Key. The address alone is enough, https:// is added for you.',
         'api_key'        => 'API key',
-        'api_key_hint'   => 'In the UniFi Network app on the console: Settings → Control Plane → Integrations → Create API Key. A key from unifi.ui.com will not work.',
+        'api_key_hint'   => 'A local key from the UniFi Network app on the console. A key from unifi.ui.com will not work.',
+        'key_help'       => 'Where do I get the API key?',
+        'key_help_1'     => 'Open the console at its local address (the one you enter above) and open the Network app.',
+        'key_help_2'     => 'Settings → Control Plane → Integrations → Create API Key. Any name, e.g. MiniDash.',
+        'key_help_3'     => 'Copy the key right away - the console shows it only once.',
+        'key_help_warn'  => 'Keys from unifi.ui.com (Site Manager → API Keys) are for the Ubiquiti cloud. The console rejects them with error 401.',
         'show'           => 'Show',
         'test'           => 'Test connection',
         'testing'        => 'Connecting to the console...',
@@ -306,6 +316,15 @@ $posted_site = $_POST['site'] ?? '';
                                 <button type="button" onclick="toggleKey()" class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-500 hover:text-slate-300 uppercase tracking-widest"><?= t('show') ?></button>
                             </div>
                             <p class="text-[11px] text-slate-600 mt-1 px-1"><?= t('api_key_hint') ?></p>
+                            <details class="mt-2 px-1 text-[11px] text-slate-400">
+                                <summary class="cursor-pointer text-indigo-300 hover:text-indigo-200 font-semibold"><?= t('key_help') ?></summary>
+                                <ol class="list-decimal pl-4 mt-2 space-y-1">
+                                    <li><?= t('key_help_1') ?></li>
+                                    <li><?= t('key_help_2') ?></li>
+                                    <li><?= t('key_help_3') ?></li>
+                                </ol>
+                                <p class="mt-2 text-amber-300/80"><?= t('key_help_warn') ?></p>
+                            </details>
                         </div>
 
                         <button type="button" id="testBtn" onclick="testConnection()"

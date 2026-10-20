@@ -71,7 +71,7 @@ Built with PHP 8.x, SQLite, Tailwind CSS and vanilla JavaScript. No frameworks, 
 
 - PHP 8.1+ with extensions: `pdo_sqlite`, `curl`, `sodium`
 - Web server (nginx or Apache)
-- UniFi Controller/Gateway with API access (API key)
+- UniFi Controller/Gateway with a local API key: in the **UniFi Network** app on the console go to **Settings > Control Plane > Integrations > Create API Key** (a Site Manager key from unifi.ui.com will not work) - details in [docs/INSTALL.md](docs/INSTALL.md#getting-a-unifi-api-key)
 - Two background jobs every minute (built into the Docker image; cron for other installs)
 
 ---

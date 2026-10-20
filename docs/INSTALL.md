@@ -457,8 +457,8 @@ chmod 770 data/
 
 ### Cannot connect to UniFi Controller
 
-1. Verify the controller URL is correct (include `https://`)
-2. Check that the API key is valid and has read access
+1. Verify the console address is correct - the Setup Wizard and the **UniFi console** page add `https://` for you
+2. Check that the API key is valid and has read access. **`401` with a key that looks right** almost always means it is a Site Manager key from unifi.ui.com - create a local one instead (see [Getting a UniFi API Key](#getting-a-unifi-api-key))
 3. If using self-signed certificates (default on UniFi), this is handled automatically
 4. Verify the controller is reachable from the MiniDash server (`200` = OK, `401` = wrong API key):
    ```bash
